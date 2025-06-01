@@ -1,3 +1,5 @@
+import numpy as np
+
 from models.Models import Model
 from config.setting import seed_sub_dependent_front_back_setting, preset_setting, set_setting_by_args
 from data_utils.load_data import get_data
@@ -76,7 +78,8 @@ import torch.nn as nn
 #    CUDA_VISIBLE_DEVICES=2 nohup python GCBNet_train.py -metrics 'acc' 'macro-f1' -model GCBNet -metric_choose 'macro-f1' -setting deap_sub_independent_train_val_test_setting -dataset_path /data1/cxx/DEAP/data_preprocessed_python -dataset deap -batch_size 256 -epochs 150 -lr 0.005 -time_window 1 -feature_type de_lds -bounds 5 5 -label_used valence arousal -seed 2024 >GCBNet_indep/deap_both_b256e150lr0.005.log
 #    0.2049	0.1841
 
-
+# s5_indep
+# s5_b16e150lr0.001
 
 def main(args):
     if args.setting is not None:
@@ -98,6 +101,20 @@ def main(args):
             else:
                 print(f"train indexes:{train_indexes}, val indexes:{val_indexes}, test indexes:{test_indexes}")
 
+            test_sub_label = None
+
+            # record who each sample belong to
+            if setting.experiment_mode == "subject-independent":
+                # extract the subject label
+                train_data, train_label, val_data, val_label, test_data, test_label = \
+                    index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, True)
+                test_sub_num = len(test_data)
+                test_sub_label = []
+                for i in range(test_sub_num):
+                    test_sub_count = len(test_data[i])
+                    test_sub_label.extend([i + 1 for j in range(test_sub_count)])
+                test_sub_label = np.array(test_sub_label)
+
             # split train and test data by specified experiment mode
             train_data, train_label, val_data, val_label, test_data, test_label = \
                 index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, args.keep_dim)
@@ -115,7 +132,7 @@ def main(args):
             output_dir = make_output_dir(args, "GCBNet_BLS")
             round_metric = train(model=model, dataset_train=dataset_train, dataset_test=dataset_test, dataset_val=dataset_val, device=device,
                                  output_dir=output_dir, metrics=args.metrics, metric_choose=args.metric_choose, optimizer=optimizer,
-                                 batch_size=args.batch_size, epochs=args.epochs, criterion=criterion, loss_func=loss_func, loss_param=model.fc.weight)
+                                 batch_size=args.batch_size, epochs=args.epochs, criterion=criterion, test_sub_label=test_sub_label, loss_func=loss_func, loss_param=model.fc.weight)
             best_metrics.append(round_metric)
             if setting.experiment_mode == "subject-dependent":
                 subjects_metrics[rridx-1].append(round_metric)

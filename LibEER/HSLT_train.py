@@ -1,3 +1,5 @@
+import numpy as np
+
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from models.Models import Model
@@ -76,6 +78,10 @@ import torch.nn as nn
 #    CUDA_VISIBLE_DEVICES=1 nohup python HSLT_train.py -metrics 'acc' 'macro-f1' -model HSLT -metric_choose 'macro-f1'  -setting hci_sub_independent_train_val_test_setting -dataset_path "/data1/cxx/HCI数据集/" -dataset hci -batch_size 128 -epochs 100 -lr 0.005 -time_window 1 -feature_type psd -bounds 5 5 -label_used valence arousal -seed 2024 -onehot >HSLT_indep/hci_both_b128e100lr0.005.log#
 #    0.3507	0.2719
 
+# s5_indep
+# s5_b32e150
+
+
 def main(args):
     if args.setting is not None:
         setting = preset_setting[args.setting](args)
@@ -95,6 +101,20 @@ def main(args):
                 print(f"train indexes:{train_indexes}, test indexes:{test_indexes}")
             else:
                 print(f"train indexes:{train_indexes}, val indexes:{val_indexes}, test indexes:{test_indexes}")
+
+            test_sub_label = None
+
+            # record who each sample belong to
+            if setting.experiment_mode == "subject-independent":
+                # extract the subject label
+                train_data, train_label, val_data, val_label, test_data, test_label = \
+                    index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, True)
+                test_sub_num = len(test_data)
+                test_sub_label = []
+                for i in range(test_sub_num):
+                    test_sub_count = len(test_data[i])
+                    test_sub_label.extend([i + 1 for j in range(test_sub_count)])
+                test_sub_label = np.array(test_sub_label)
 
             # split train and test data by specified experiment mode
             train_data, train_label, val_data, val_label, test_data, test_label = \
@@ -118,7 +138,7 @@ def main(args):
             output_dir = make_output_dir(args, "HSLT")
             round_metric = train(model=model, dataset_train=dataset_train, dataset_val=dataset_val, dataset_test=dataset_test, device=device,
                                  output_dir=output_dir, metrics=args.metrics, metric_choose=args.metric_choose, optimizer=optimizer, scheduler=scheduler,
-                                 batch_size=args.batch_size, epochs=args.epochs, criterion=criterion)
+                                 batch_size=args.batch_size, epochs=args.epochs, criterion=criterion, test_sub_label=test_sub_label)
             best_metrics.append(round_metric)
             if setting.experiment_mode == "subject-dependent":
                 subjects_metrics[rridx-1].append(round_metric)

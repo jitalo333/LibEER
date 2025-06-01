@@ -1,3 +1,5 @@
+import numpy as np
+
 from data_utils.preprocess import normalize
 from models.Models import Model
 from config.setting import seed_sub_dependent_front_back_setting, preset_setting, set_setting_by_args
@@ -76,6 +78,8 @@ import torch.nn as nn
 #    both
 #    0.2784	0.2436
 
+# mped_b256e100
+
 
 
 def main(args):
@@ -98,6 +102,20 @@ def main(args):
             else:
                 print(f"train indexes:{train_indexes}, val indexes:{val_indexes}, test indexes:{test_indexes}")
 
+            test_sub_label = None
+
+            # record who each sample belong to
+            if setting.experiment_mode == "subject-independent":
+                # extract the subject label
+                train_data, train_label, val_data, val_label, test_data, test_label = \
+                    index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, True)
+                test_sub_num = len(test_data)
+                test_sub_label = []
+                for i in range(test_sub_num):
+                    test_sub_count = len(test_data[i])
+                    test_sub_label.extend([i + 1 for j in range(test_sub_count)])
+                test_sub_label = np.array(test_sub_label)
+
             # split train and test data by specified experiment mode
             train_data, train_label, val_data, val_label, test_data, test_label = \
                 index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, args.keep_dim)
@@ -116,7 +134,7 @@ def main(args):
             criterion = nn.CrossEntropyLoss()
             output_dir = make_output_dir(args, "DBN")
             round_metric = train(model=model, dataset_train=dataset_train, dataset_val=dataset_val, dataset_test=dataset_test, device=device,
-                                 output_dir=output_dir, metrics=args.metrics, metric_choose=args.metric_choose,
+                                 output_dir=output_dir, metrics=args.metrics, metric_choose=args.metric_choose, test_sub_label=test_sub_label,
                                  batch_size=args.batch_size, epochs=args.epochs)
             best_metrics.append(round_metric)
             if setting.experiment_mode == "subject-dependent":

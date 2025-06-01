@@ -1,3 +1,5 @@
+import numpy as np
+
 from data_utils.constants.deap import DEAP_CHANNEL_NAME
 from data_utils.constants.seed import SEED_CHANNEL_NAME
 from models.Models import Model
@@ -65,6 +67,9 @@ import numpy as np
 #   python TSception_train.py -metrics 'acc' 'macro-f1' -model TSception -metric_choose 'macro-f1'  -setting hci_sub_dependent_train_val_test_setting -dataset_path "/data1/cxx/HCI数据集/" -dataset hci -batch_size 32 -epochs 300 -lr 0.002 -only_seg -sample_length 128 -stride 128 -bounds 5 5 -label_used valence arousal -seed 2024 >TSception/hci_both_b32e300lr0.002.log
 #   0.4000/0.2060	0.2719/0.1365
 
+# s5_indep
+# s5_b64e300
+
 def main(args):
     if args.setting is not None:
         setting = preset_setting[args.setting](args)
@@ -85,6 +90,20 @@ def main(args):
             else:
                 print(f"train indexes:{train_indexes}, val indexes:{val_indexes}, test indexes:{test_indexes}")
 
+            test_sub_label = None
+
+            # record who each sample belong to
+            if setting.experiment_mode == "subject-independent":
+                # extract the subject label
+                train_data, train_label, val_data, val_label, test_data, test_label = \
+                    index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, True)
+                test_sub_num = len(test_data)
+                test_sub_label = []
+                for i in range(test_sub_num):
+                    test_sub_count = len(test_data[i])
+                    test_sub_label.extend([i + 1 for j in range(test_sub_count)])
+                test_sub_label = np.array(test_sub_label)
+
             # split train and test data by specified experiment mode
             train_data, train_label, val_data, val_label, test_data, test_label = \
                 index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, args.keep_dim)
@@ -101,7 +120,7 @@ def main(args):
             indexes = np.array([])
             if args.dataset == "deap" or args.dataset == "hci":
                 indexes = generate_TS_channel_order(DEAP_CHANNEL_NAME)
-            elif args.dataset.startswith("seed"):
+            elif args.dataset.startswith("seed") or args.dataset.startswith("mped"):
                 indexes = generate_TS_channel_order(SEED_CHANNEL_NAME)
             train_data = train_data[:, indexes, :]
             val_data = val_data[:, indexes, :]
@@ -116,7 +135,7 @@ def main(args):
             output_dir = make_output_dir(args, "TSception")
             round_metric = train(model=model, dataset_train=dataset_train, dataset_val=dataset_val, dataset_test=dataset_test, device=device
                                  ,output_dir=output_dir, metrics=args.metrics, metric_choose=args.metric_choose, optimizer=optimizer,
-                                 batch_size=args.batch_size, epochs=args.epochs, criterion=criterion)
+                                 batch_size=args.batch_size, epochs=args.epochs, criterion=criterion, test_sub_label=test_sub_label)
             best_metrics.append(round_metric)
             if setting.experiment_mode == "subject-dependent":
                 subjects_metrics[rridx-1].append(round_metric)

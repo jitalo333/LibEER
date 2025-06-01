@@ -1,3 +1,5 @@
+import numpy as np
+
 from models.Models import Model
 from config.setting import seed_sub_dependent_front_back_setting, preset_setting, set_setting_by_args
 from data_utils.load_data import get_data
@@ -15,9 +17,6 @@ import torch.nn as nn
 #    reproduction
 #    python BiDANN_train.py -onehot -sample_length 9 -batch_size 16 -lr 0.00004 -sessions 1 2 -epochs 80 -setting seed_sub_dependent_front_back_setting
 #    0.8929/0.0874
-
-
-
 
 def main(args):
     if args.setting is not None:
@@ -39,11 +38,25 @@ def main(args):
             else:
                 print(f"train indexes:{train_indexes}, val indexes:{val_indexes}, test indexes:{test_indexes}")
 
+            test_sub_label = None
+
+            # record who each sample belong to
+            if setting.experiment_mode == "subject-independent":
+                # extract the subject label
+                train_data, train_label, val_data, val_label, test_data, test_label = \
+                    index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, True)
+                test_sub_num = len(test_data)
+                test_sub_label = []
+                for i in range(test_sub_num):
+                    test_sub_count = len(test_data[i])
+                    test_sub_label.extend([i + 1 for j in range(test_sub_count)])
+                test_sub_label = np.array(test_sub_label)
+            print(test_sub_label)
             # split train and test data by specified experiment mode
             train_data, train_label, val_data, val_label, test_data, test_label = \
                 index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, args.keep_dim)
-            print(f"train data shape: {train_data.shape}, train label shape: {train_label.shape}")
-            print(f"train_label[0]: {train_label[0]}")
+            # print(f"train data shape: {train_data.shape}, train label shape: {train_label.shape}")
+            # print(f"train_label[0]: {train_label[0]}")
             if len(val_data) == 0:
                 val_data = test_data
                 val_label = test_label
@@ -62,7 +75,7 @@ def main(args):
             round_metric = train(model=model, dataset_train=dataset_train, dataset_val=dataset_val, dataset_test=dataset_test, device=device,
                                  output_dir=output_dir, metrics=args.metrics, metric_choose=args.metric_choose, optimizer=optimizer,
                                  batch_size=args.batch_size, epochs=args.epochs, f_criterion=f_criterion, left_ld_criterion=left_ld_criterion,
-                                 right_ld_criterion=right_ld_criterion, global_criterion=global_criterion,
+                                 right_ld_criterion=right_ld_criterion, global_criterion=global_criterion, test_sub_label=test_sub_label,
                                  loss_func=None, loss_param=model)
             best_metrics.append(round_metric)
             if setting.experiment_mode == "subject-dependent":

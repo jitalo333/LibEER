@@ -1,3 +1,5 @@
+import numpy as np
+
 from models.Models import Model
 from config.setting import seed_sub_dependent_front_back_setting, preset_setting, set_setting_by_args
 from data_utils.load_data import get_data
@@ -103,6 +105,20 @@ def main(args):
             else:
                 print(f"train indexes:{train_indexes}, val indexes:{val_indexes}, test indexes:{test_indexes}")
 
+            test_sub_label = None
+
+            # record who each sample belong to
+            if setting.experiment_mode == "subject-independent":
+                # extract the subject label
+                train_data, train_label, val_data, val_label, test_data, test_label = \
+                    index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, True)
+                test_sub_num = len(test_data)
+                test_sub_label = []
+                for i in range(test_sub_num):
+                    test_sub_count = len(test_data[i])
+                    test_sub_label.extend([i + 1 for j in range(test_sub_count)])
+                test_sub_label = np.array(test_sub_label)
+
             # split train and test data by specified experiment mode
             train_data, train_label, val_data, val_label, test_data, test_label = \
                 index_to_data(data_i, label_i, train_indexes, test_indexes, val_indexes, args.keep_dim)
@@ -115,7 +131,7 @@ def main(args):
             # noise label
             train_label = torch.Tensor(model.noise_label(train_label))
             # train_label = F.log_softmax(train_label, dim=1)
-            if args.dataset.startswith("seed"):
+            if args.dataset.startswith("seed") or args.dataset.startswith("mped"):
                 edge_adj = torch.Tensor(SEED_RGNN_ADJACENCY_MATRIX)
             elif args.dataset.startswith("deap") or args.dataset.startswith("hci"):
                 edge_adj = torch.Tensor(DEAP_RGNN_ADJACENCY_MATRIX)
@@ -130,7 +146,7 @@ def main(args):
             loss_func = SparseL1Regularization(0.01)
             output_dir = make_output_dir(args, "RGNN")
             round_metric = train(model=model, dataset_train=dataset_train, dataset_val=dataset_val, dataset_test=dataset_test, edge_adj=edge_adj, device=device, output_dir=output_dir, metrics=args.metrics, optimizer=optimizer,
-                                 batch_size=args.batch_size, epochs=args.epochs, criterion=criterion, loss_func=loss_func, loss_param=model.edge_weight)
+                                 batch_size=args.batch_size, epochs=args.epochs, criterion=criterion, test_sub_label=test_sub_label, loss_func=loss_func, loss_param=model.edge_weight)
             best_metrics.append(round_metric)
             if setting.experiment_mode == "subject-dependent":
                 subjects_metrics[rridx-1].append(round_metric)
