@@ -4,11 +4,11 @@ from torch.utils.data import DataLoader,RandomSampler, SequentialSampler
 from tqdm import tqdm
 from itertools import cycle
 
-from utils.metric import Metric
+from utils.metric import Metric, SubMetric
 from utils.store import save_state
 
 def train(model, dataset_train, dataset_val, dataset_test, device, output_dir="result/", metrics=None, metric_choose=None, optimizer=None, 
-          scheduler=None, batch_size=16, epochs=40, f_criterion=None, left_ld_criterion=None, right_ld_criterion=None, global_criterion=None,loss_func=None, loss_param=None):
+          scheduler=None, batch_size=16, epochs=40, f_criterion=None, left_ld_criterion=None, right_ld_criterion=None, global_criterion=None, test_sub_label=None,loss_func=None, loss_param=None):
     if metrics is None:
         metrics = ['acc']
     if metric_choose is None:
@@ -19,13 +19,16 @@ def train(model, dataset_train, dataset_val, dataset_test, device, output_dir="r
     sampler_test = SequentialSampler(dataset_test)
     # load dataset
     data_loader_train = DataLoader(
-        dataset_train, sampler=sampler_train, batch_size=batch_size, num_workers=4
+        dataset_train, sampler=sampler_train, batch_size=batch_size, num_workers=4, drop_last=True
     )
     data_loader_val = DataLoader(
-        dataset_val, sampler=sampler_val, batch_size=batch_size, num_workers=4
+        dataset_val, sampler=sampler_val, batch_size=batch_size, num_workers=4, drop_last=True
     )
     data_loader_test = DataLoader(
-        dataset_test, sampler=sampler_test, batch_size=batch_size, num_workers=4
+        dataset_test, sampler=sampler_test, batch_size=batch_size, num_workers=4, drop_last=True
+    )
+    test_sub_label_loader = DataLoader(
+        test_sub_label, sampler=sampler_test, batch_size=batch_size, num_workers=4, drop_last=True
     )
     model = model.to(device)
     # create criterion
@@ -70,6 +73,10 @@ def train(model, dataset_train, dataset_val, dataset_test, device, output_dir="r
                 save_state(output_dir, model, optimizer, epoch+1, metric=m)
     model.load_state_dict(torch.load(f"{output_dir}/checkpoint-best{metric_choose}")['model'])
     metric_value = evaluate(model, data_loader_test, device, metrics, f_criterion, loss_func, loss_param)
+    if test_sub_label is not None:
+        metric_value = sub_evaluate(model, data_loader_test, test_sub_label_loader, device, metrics, f_criterion, loss_func, loss_param)
+    else:
+        metric_value = evaluate(model, data_loader_test, device, metrics, f_criterion, loss_func, loss_param)
     for m in metrics:
         print(f"best_val_{m}: {best_metric[m]:.2f}")
         print(f"best_test_{m}: {metric_value[m]:.2f}")
@@ -97,6 +104,30 @@ def evaluate(model, data_loader, device, metrics, criterion, loss_func, loss_par
         # one hot code
         # loss = criterion(outputs, targets)
         metric.update(torch.argmax(outputs, dim=1), targets, loss.item())
+
+    print("\033[34m eval state: " + metric.value())
+    return metric.values
+
+@torch.no_grad()
+def sub_evaluate(model, data_loader, sub_labels, device, metrics, criterion, loss_func, loss_param):
+    model.eval()
+    # create sub metric
+    metric = SubMetric(metrics)
+    for idx, ((samples, targets), sub_label) in tqdm(enumerate(zip(data_loader, sub_labels)), total=len(data_loader),
+                                        desc=f"Evaluating : "):
+        # load the samples into the device
+        samples = samples.to(device)
+        targets = targets.to(device)
+        targets = torch.argmax(targets, dim=1)
+
+        # perform emotion recognition
+        outputs, _, _, _ = model(samples, samples)
+
+        # calculate the loss value
+        loss = criterion(outputs, targets) + (0 if loss_func is None else loss_func(loss_param))
+        # one hot code
+        # loss = criterion(outputs, targets)
+        metric.update(torch.argmax(outputs, dim=1), targets, sub_label, loss.item())
 
     print("\033[34m eval state: " + metric.value())
     return metric.values
