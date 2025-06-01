@@ -1,10 +1,11 @@
-
 class Setting:
-    def __init__(self, dataset, dataset_path, pass_band, extract_bands, time_window, overlap, sample_length, stride, seed,
-                 feature_type, only_seg=False, cross_trail='true', experiment_mode="subject-dependent", train_part=None, eog_clean=True,
+    def __init__(self, dataset, dataset_path, pass_band=None, extract_bands=None, time_window=1, overlap=0, sample_length=1, stride=1, seed=0,
+                 feature_type='de_lds', only_seg=False, cross_trail='true', experiment_mode="subject-dependent", train_part=None, eog_clean=True,
                  metrics=None, normalize=False, save_data=True, split_type="kfold", fold_num=5, fold_shuffle=True, front=9, test_size=0.2, val_size = 0.2, sessions=None, pr=None, sr=None, bounds=None,
-                 onehot=False, label_used=None):
+                 onehot=True, label_used=None):
         # random seed
+        if pass_band is None:
+            pass_band = [0.3, 50]
         self.seed = seed
 
         # dataset setting
@@ -17,7 +18,7 @@ class Setting:
         # Data at indices 0 and 1 represent the lower and higher thresholds of bandpass filtering
         self.pass_band = pass_band
         # Two-dimensional array, with each element at an index representing the range of each frequency band
-        self.extract_bands = extract_bands if extract_bands is None else extract_bands
+        self.extract_bands = extract_bands
         # The size of the time window during preprocessing, in num of data points
         self.time_window = time_window
         # the length of overlap for each preprocessing window
@@ -116,6 +117,90 @@ def seed_sub_dependent_train_val_test_setting(args):
                    sample_length=args.sample_length, stride=args.stride, seed=args.seed, feature_type=args.feature_type,
                    only_seg=args.only_seg, experiment_mode="subject-dependent", normalize=args.normalize,
                    split_type='train-val-test', test_size=0.2, val_size=0.2, sessions=args.sessions, pr=args.pr, sr=args.sr, onehot=args.onehot,
+                   label_used=args.label_used)
+
+def seedv_sub_dependent_train_val_test_setting(args):
+    if not args.dataset.startswith('seedv'):
+        print('not using SEED V dataset, please check your setting')
+        exit(1)
+    print("Using SeedV subject dependent train val test experiment mode, \n"
+          "For each subject, nine random trails were used as training set, three random trails were used as verification"
+          " set, last three trails were used as test, we choose best results in verification set and test results in test")
+    return Setting(dataset=args.dataset, dataset_path=args.dataset_path, pass_band=[args.low_pass, args.high_pass],
+                   extract_bands=None, time_window=args.time_window, overlap=args.overlap,
+                   sample_length=args.sample_length, stride=args.stride, seed=args.seed, feature_type=args.feature_type,
+                   only_seg=args.only_seg, experiment_mode="subject-dependent", normalize=args.normalize,
+                   split_type='train-val-test', test_size=0.2, val_size=0.2, sessions=[1,2,3], pr=args.pr,
+                   sr=args.sr, onehot=args.onehot,
+                   label_used=args.label_used)
+
+def seedv_sub_dependent_train_val_test_mean_setting(args):
+    if not args.dataset.startswith('seedv'):
+        print('not using SEED V dataset, please check your setting')
+        exit(1)
+    print("Using SeedV subject dependent train val test experiment mode, \n"
+          "For each subject, five random trails were used as training set, five random trails were used as verification"
+          " set, last five trails were used as test, we choose best results in verification set and test results in test")
+    return Setting(dataset=args.dataset, dataset_path=args.dataset_path, pass_band=[args.low_pass, args.high_pass],
+                   extract_bands=None, time_window=args.time_window, overlap=args.overlap,
+                   sample_length=args.sample_length, stride=args.stride, seed=args.seed, feature_type=args.feature_type,
+                   only_seg=args.only_seg, experiment_mode="subject-dependent", normalize=args.normalize,
+                   split_type='train-val-test', test_size=0.34, val_size=0.34, sessions=[1,2,3], pr=args.pr,
+                   sr=args.sr, onehot=args.onehot,
+                   label_used=args.label_used)
+def seedv_sub_independent_train_val_test_setting(args):
+    if not args.dataset.startswith('seedv'):
+        print('not using SEED V dataset, please check your setting')
+        exit(1)
+    print("Using SeedV subject independent train val test experiment mode, \n"
+          "For each subject, 10 random subjects were used as training set, 3 random trails were used as verification"
+          " set, last 3 trails were used as test, we choose best results in verification set and test results in test")
+    return Setting(dataset=args.dataset, dataset_path=args.dataset_path, pass_band=[args.low_pass, args.high_pass],
+                   extract_bands=None, time_window=args.time_window, overlap=args.overlap,
+                   sample_length=args.sample_length, stride=args.stride, seed=args.seed, feature_type=args.feature_type,
+                   only_seg=args.only_seg, experiment_mode="subject-independent", normalize=args.normalize,
+                   split_type='train-val-test', test_size=0.2, val_size=0.2,
+                   sessions=[1,2,3] if args.sessions is None else args.sessions,
+                   pr=args.pr, sr=args.sr, onehot=args.onehot, label_used=args.label_used)
+def mped_sub_dependent_train_val_test_setting(args):
+    if not args.dataset.startswith('mped'):
+        print('not using mped dataset, please check your setting')
+        exit(1)
+    print("Using mped subject dependent train val test experiment mode, \n"
+          "For each subject, five random trails were used as training set, five random trails were used as verification"
+          " set, last five trails were used as test, we choose best results in verification set and test results in test")
+    return Setting(dataset=args.dataset, dataset_path=args.dataset_path, pass_band=[args.low_pass, args.high_pass],
+                   extract_bands=None, time_window=args.time_window, overlap=args.overlap,
+                   sample_length=args.sample_length, stride=args.stride, seed=args.seed, feature_type=args.feature_type,
+                   only_seg=args.only_seg, experiment_mode="subject-dependent", normalize=args.normalize,
+                   split_type='train-val-test', test_size=0.25, val_size=0.25, sessions=[1], pr=args.pr,
+                   sr=args.sr, onehot=args.onehot,
+                   label_used=args.label_used)
+
+def mped_sub_independent_train_val_test_setting(args):
+    if not args.dataset.startswith('mped'):
+        print('not using mped dataset, please check your setting')
+        exit(1)
+    return Setting(dataset=args.dataset, dataset_path=args.dataset_path, pass_band=[args.low_pass, args.high_pass],
+                   extract_bands=None, time_window=args.time_window, overlap=args.overlap,
+                   sample_length=args.sample_length, stride=args.stride, seed=args.seed, feature_type=args.feature_type,
+                   only_seg=args.only_seg, experiment_mode="subject-independent", normalize=args.normalize,
+                   split_type='train-val-test', test_size=0.2, val_size=0.2, sessions=[1], pr=args.pr,
+                   sr=args.sr, onehot=args.onehot,
+                   label_used=args.label_used)
+
+def mped_sub_dependent_front_back_setting(args):
+    if not args.dataset.startswith('mped'):
+        print('not using mped dataset, please check your setting')
+        exit(1)
+    print("Using mped subject dependent train val test experiment mode, \n"
+          "For each subject, five random trails were used as training set, five random trails were used as verification"
+          " set, last five trails were used as test, we choose best results in verification set and test results in test")
+    return Setting(dataset=args.dataset, dataset_path=args.dataset_path, pass_band=[args.low_pass, args.high_pass],
+                   extract_bands=None, time_window=args.time_window, overlap=args.overlap,
+                   sample_length=args.sample_length, stride=args.stride, seed=args.seed, feature_type=args.feature_type,
+                   only_seg=args.only_seg, experiment_mode="subject-dependent", normalize=args.normalize,
+                   split_type='front-back', front=14, sessions=args.sessions, pr=args.pr, sr=args.sr, onehot=args.onehot,
                    label_used=args.label_used)
 def seediv_sub_dependent_train_val_test_setting(args):
     if not args.dataset.startswith('seediv'):
@@ -235,7 +320,7 @@ def deap_sub_dependent_train_val_test_setting(args):
     if not args.dataset.startswith('deap'):
         print('not using deap dataset, please check your setting')
         exit(1)
-    print("Using deap subject dependent early stopping experiment mode")
+    print("Using deap subject dependent train-val-test experiment mode")
     return Setting(dataset=args.dataset, dataset_path=args.dataset_path, pass_band=[args.low_pass, args.high_pass],
                    extract_bands=None, time_window=args.time_window, overlap=args.overlap,
                    sample_length=args.sample_length, stride=args.stride, seed=args.seed, feature_type=args.feature_type,
@@ -308,18 +393,24 @@ def dreamer_sub_dependent_setting(args):
                    onehot=args.onehot, label_used=args.label_used)
 
 preset_setting = {
-    "faced_sub_independent_train_val_test_setting": faced_sub_independent_train_val_test_setting,
     "seed_sub_dependent_train_val_test_setting": seed_sub_dependent_train_val_test_setting,
     "seediv_sub_dependent_train_val_test_setting": seediv_sub_dependent_train_val_test_setting,
     "seed_sub_independent_train_val_test_setting": seed_sub_independent_train_val_test_setting,
     "seediv_sub_independent_train_val_test_setting": seediv_sub_independent_train_val_test_setting,
+    "seedv_sub_dependent_train_val_test_mean_setting":seedv_sub_dependent_train_val_test_mean_setting,
+    "seedv_sub_independent_train_val_test_setting":seedv_sub_independent_train_val_test_setting,
     "deap_sub_dependent_train_val_test_setting" : deap_sub_dependent_train_val_test_setting,
     "hci_sub_dependent_train_val_test_setting" : hci_sub_dependent_train_val_test_setting,
     "deap_sub_independent_train_val_test_setting" : deap_sub_independent_train_val_test_setting,
     "hci_sub_independent_train_val_test_setting" : hci_sub_independent_train_val_test_setting,
+    "mped_sub_dependent_train_val_test_setting" : mped_sub_dependent_train_val_test_setting,
+    "mped_sub_independent_train_val_test_setting" : mped_sub_independent_train_val_test_setting,
     # ***********************************************************************
+    "faced_sub_independent_train_val_test_setting": faced_sub_independent_train_val_test_setting,
     "seed_sub_dependent_5fold_setting": seed_sub_dependent_5fold_setting,
+    "mped_sub_dependent_front_back_setting" : mped_sub_dependent_front_back_setting,
     "seed_sub_dependent_front_back_setting": seed_sub_dependent_front_back_setting,
+    "seedv_sub_dependent_train_val_test_setting": seedv_sub_dependent_train_val_test_setting,
     "seed_sub_independent_leave_one_out_setting": seed_sub_independent_leave_one_out_setting,
     "seed_cross_session_setting": seed_cross_session_setting,
     "deap_sub_independent_leave_one_out_setting": deap_sub_independent_leave_one_out_setting,
