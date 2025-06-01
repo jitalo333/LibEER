@@ -11,7 +11,7 @@ def get_args_parser():
     # training  parameters
     parser.add_argument('-batch_size', default=128, type=int, help='batch size per GPU')
     parser.add_argument('-epochs', default=40, type=int)
-    parser.add_argument('-device', default='cuda', type=str, choices=['cuda', 'cpu'], help='which devices to train')
+    parser.add_argument('-device', default='cuda', type=str, choices=['cuda', 'cuda:0', 'cpu'], help='which devices to train')
     parser.add_argument('-eval', default=False, action='store_true', help='if eval, perform evaluation only')
     parser.add_argument('-seed', default=1, type=int, help='random seed')
     parser.add_argument('-num_workers', default=4, type=int)
@@ -28,7 +28,6 @@ def get_args_parser():
 
     # model parameters
     parser.add_argument('-model', default='DGCNN', type=str, help='Name of model to train')
-
     # log parameters
     parser.add_argument('-log_dir', default='./log/', help='location of log dir')
     parser.add_argument('-output_dir', default='./result/', help='location of output dir')
@@ -59,7 +58,7 @@ def get_args_parser():
     parser.add_argument('-cross_trail', default='true', type=str, help="whether use cross-trail setting")
     parser.add_argument('-experiment_mode', default='subject-dependent', type=str,
                         help='which experiment mode be selected')
-    parser.add_argument('-split_type', default='front-back', type=str, choices=['kfold', 'leave-one-out', 'front-back'],
+    parser.add_argument('-split_type', default='front-back', type=str, choices=['kfold', 'leave-one-out', 'front-back', 'train-val-test'],
                         help="choose which method to split dataset")
     parser.add_argument('-fold_num', default=5, type=int, help='the number of folds')
     parser.add_argument('-fold_shuffle', default='true', type=str, help='whether shuffle when using k-fold split')

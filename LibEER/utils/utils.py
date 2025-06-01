@@ -30,14 +30,18 @@ def result_log(args, best_metrics):
     output = {}
     s = "|{:^10}|".format("Result")
     for metric_name in args.metrics:
+        flag = (metric_name+"_std") in best_metrics[0]
         output[metric_name] = []
-        s += "{:^10}|".format(metric_name)
+        s += "{:^15}|".format(metric_name +("_mean" if flag else ""))
+        s += "{:^15}|".format(metric_name + "_std") if flag else ""
     print(s)
     for idx, metric in enumerate(best_metrics):
         s_i = "|{:^10}|".format(idx + 1)
         for n in args.metrics:
+            flag = (n+"_std") in metric
             output[n].append(metric[n])
-            s_i += "{:^10.3f}|".format(metric[n])
+            s_i += "{:^15.4f}|".format(metric[n])
+            s_i += "{:^15.4f}|".format(metric[n+"_std"]) if flag else ""
         print(s_i)
     for metric in args.metrics:
         print("ALLRound Mean and Std of {} : {:.4f}/{:.4f}".format(metric, np.mean(output[metric]), np.std(output[metric])))
@@ -53,7 +57,6 @@ def sub_result_log(args, subjects_metrics):
                 sub_output[metric] += r_metric[metric]
             sub_output[metric] /= len(subjects_metrics[i])
         sub_outputs[f"sub {i}"] = sub_output
-    # sub_outputs: (sub, metric)
     save_res(args, sub_outputs)
     sub_mean_std = {}
     for metric in args.metrics:
