@@ -1,8 +1,9 @@
 import fnmatch
 import json
 import os
-import pickle
+from symbol import trailer
 
+import scipy.io
 from scipy.io import loadmat
 import numpy as np
 import multiprocessing as mp
@@ -10,6 +11,9 @@ from functools import partial
 import mne
 import xmltodict
 import pickle
+import mat73
+from tqdm import tqdm
+from scipy.signal import decimate
 
 from data_utils.preprocess import preprocess, label_process
 from .preprocess import lds
@@ -37,13 +41,14 @@ def get_data(setting=None):
 available_dataset = [
     "seed_raw", "seediv_raw", "deap", "deap_raw", "hci", "dreamer", "seed_de", "seed_de_lds", "seed_psd", "seed_psd_lds", "seed_dasm", "seed_dasm_lds"
     , "seed_rasm", "seed_rasm_lds", "seed_asm", "seed_asm_lds", "seed_dcau", "seed_dcau_lds", "seediv_de_lds", "seediv_de_movingAve",
-    "seediv_psd_movingAve", "seediv_psd_lds", "faced_de", "faced_psd", "faced_de_lds", "faced_psd_lds"
+    "seediv_psd_movingAve", "seediv_psd_lds", "faced_de", "faced_psd", "faced_de_lds", "faced_psd_lds", "seedv_raw", "seedv_de", "mped_raw","mped_feature",
+    "mped_de_lds"
 ]
 
 extract_dataset = {
     "seed_de", "seed_de_lds", "seed_psd", "seed_psd_lds", "seed_dasm", "seed_dasm_lds"
     , "seed_rasm", "seed_rasm_lds", "seed_asm", "see_und_asm_lds", "seed_dcau", "seed_dcau_lds", "seediv_de_lds", "seediv_de_movingAve",
-    "seediv_psd_movingAve", "seediv_psd_lds", "faced_de", "faced_psd", "faced_de_lds", "faced_psd_lds"
+    "seediv_psd_movingAve", "seediv_psd_lds", "faced_de", "faced_psd", "faced_de_lds", "faced_psd_lds","mped_feature","mped_de_lds"
 }
 
 def get_uniform_data(dataset, dataset_path):
@@ -60,11 +65,15 @@ def get_uniform_data(dataset, dataset_path):
         "dreamer": read_dreamer,
         "deap_raw": read_deap_raw,
         "seediv_raw": read_seedIV_raw,
+        "seedv_raw": read_seedV_raw,
+        "mped_raw": read_mped_raw,
+        "mped_feature": read_mped_feature,
+        "mped_de_lds": read_mped_de_lds,
         "hci": read_hci
     }
     if dataset.startswith("seediv") and dataset != "seediv_raw":
         data, baseline, label, sample_rate, channels = read_seedIV_feature(dataset_path, feature_type=dataset[7:])
-    elif dataset.startswith("seed") and not dataset.startswith("seediv") and dataset != "seed_raw":
+    elif dataset.startswith("seed") and not dataset.startswith("seediv") and not dataset.startswith("seedv") and dataset != "seed_raw":
         # call the read_seed_feature function when using the feature provided by seed official
         data, baseline, label, sample_rate, channels = read_seed_feature(dataset_path, feature_type=dataset[5:])
     elif dataset.startswith("faced") and dataset != "faced_raw":
@@ -138,7 +147,6 @@ def read_seed_raw(dir_path):
             # Map the parallel_read_seed_feature function to each file in the list
             eeg_data[session_id] = pool.map(
                 partial(parallel_read_seed_raw, dir_path), eeg_files[session_id])
-
     return eeg_data, None, labels, 200, 62
 
 def parallel_read_seed_raw(dir_path, file):
@@ -150,8 +158,6 @@ def parallel_read_seed_raw(dir_path, file):
         trail_data = subject_data[keys[i]]
         trail_datas.append(trail_data[:,1:])
     return trail_datas
-
-
 
 def read_seed_feature(dir_path, feature_type="de"):
     """
@@ -273,7 +279,6 @@ def parallel_read_seedIV_raw(dir_path, file):
         trail_datas.append(trail_data[:,1:])
     return trail_datas
 
-
 def read_seedIV_feature(dir_path, feature_type="de_lds"):
     # 读取seed IV数据集
     # input file : three folder each contains one session of 15 subjects' eeg data
@@ -329,6 +334,7 @@ def read_seedIV_feature(dir_path, feature_type="de_lds"):
         for i in range(15):
             eeg_data[ses_id].append(result_session[i])
     return eeg_data, None, label, None, 62
+
 def parallel_read_seedIV_feature(fi, dir_path, label, file):
     subject_data = loadmat(f"{dir_path}/{file}")
     keys = list(subject_data.keys())[3:]
@@ -338,6 +344,164 @@ def parallel_read_seedIV_feature(fi, dir_path, label, file):
         trail_datas.append(trail_data)
     return trail_datas
 
+def read_seedV_raw(dir_path):
+    mne.set_log_level("ERROR")
+    dir_path = dir_path + "EEG_raw/"
+    eeg_files = [[
+                  '1_1_20180804.cnt', '2_1_20180416.cnt', '3_1_20180414.cnt', '4_1_20180414.cnt',
+                  '5_1_20180719.cnt', '6_1_20180713.cnt', '7_1_20180411.cnt', '8_1_20180717.cnt',
+                  '9_1_20180724.cnt', '10_1_20180507.cnt', '11_1_20180510.cnt', '12_1_20180515.cnt',
+                  '13_1_20180720.cnt', '14_1_20180420.cnt', '15_1_20180724.cnt', '16_1_20180805.cnt',],
+                 [
+                  '1_2_20180810.cnt', '2_2_20180419.cnt', '3_2_20180419.cnt', '4_2_20180417.cnt',
+                  '5_2_20180728.cnt', '6_2_20180731.cnt', '7_2_20180418.cnt', '8_2_20180802.cnt',
+                  '9_2_20180804.cnt', '10_2_20180524.cnt', '11_2_20180508.cnt', '12_2_20180508.cnt',
+                  '13_2_20180806.cnt', '14_2_20180423.cnt', '15_2_20180807.cnt', '16_2_20180815.cnt',
+                 ],
+                 [
+                     '1_3_20180808.cnt', '2_3_20180425.cnt', '3_3_20180424.cnt', '4_3_20180501.cnt',
+                     '5_3_20180723.cnt', '6_3_20180802.cnt', '7_3_20180422.cnt', '8_3_20180726.cnt',
+                     '9_3_20180728.cnt', '10_3_20180626.cnt', '11_3_20180522.cnt', '12_3_20180517.cnt',
+                     '13_3_20180725.cnt', '14_3_20180427.cnt', '15_3_20180730.cnt', '16_3_20180813.cnt']
+                 ]
+    start_seconds = [[30, 132, 287, 555, 773, 982, 1271, 1628, 1730, 2025, 2227, 2435, 2667, 2932, 3204],
+                     [30, 299, 548, 646, 836, 1000, 1091, 1392, 1657, 1809, 1966, 2186, 2333, 2490, 2741],
+                     [30, 353, 478, 674, 825, 908, 1200, 1346, 1451, 1711, 2055, 2307, 2457, 2726, 2888]]
+    end_seconds = [[102, 228, 524, 742, 920, 1240, 1568, 1697, 1994, 2166, 2401, 2607, 2901, 3172, 3359],
+                   [267, 488, 614, 773, 967, 1059, 1331, 1622, 1777, 1908, 2153, 2302, 2428, 2709, 2817],
+                   [321, 418, 643, 764, 877, 1147, 1284, 1418, 1679, 1996, 2275, 2425, 2664, 2857, 3066]]
+    ses_id = 0
+    data = [[],[],[]]
+    label = np.zeros((3, 16, 15), dtype=int)
+    ses_label1 = [4,1,3,2,0,4,1,3,2,0,4,1,3,2,0]
+    ses_label2 = [2,1,3,0,4,4,0,3,2,1,3,4,1,2,0]
+    ses_label3 = [2,1,3,0,4,4,0,3,2,1,3,4,1,2,0]
+    ses_label1s = np.tile(ses_label1, (1, 16, 1))
+    ses_label2s = np.tile(ses_label2, (1, 16, 1))
+    ses_label3s = np.tile(ses_label3, (1, 16, 1))
+    label[0] = ses_label1s
+    label[1] = ses_label2s
+    label[2] = ses_label3s
+    total_files = sum(len(ses) for ses in eeg_files)
+    pbar_total = tqdm(total=total_files, desc="Total Progress for seedV processing")
+
+    for ses_id, ses_file in enumerate(eeg_files):
+        with tqdm(total=len(ses_file), desc=f"Session {ses_id + 1}", leave=False) as pbar_session:
+            for sub_file in ses_file:
+                sub_data = []
+                eeg_raw = mne.io.read_raw_cnt(dir_path + sub_file, verbose=False)
+                useless_ch = ['M1', 'M2', 'VEO', 'HEO']
+                eeg_raw.drop_channels(useless_ch)
+                ch = eeg_raw.ch_names
+                sub_raw_data = eeg_raw.get_data()
+                for i in tqdm(range(15), desc="Processing trials", leave=False):
+                    trail_data_i = sub_raw_data[:, start_seconds[ses_id][i] * 1000: end_seconds[ses_id][i] * 1000]
+                    trail_downsampled_data_i = decimate(trail_data_i, q=5, ftype='fir', axis=1)
+                    sub_data.append(trail_downsampled_data_i)
+                data[ses_id].append(sub_data)
+                pbar_session.update(1)
+                pbar_total.update(1)
+    pbar_total.close()
+    return data, None, label, 200, 62
+
+def read_mped_raw(dir_path):
+    # available_set = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 31, 32]
+    # available_set = [2, 3, 4, 5, 6, 7, 8, 9, 10,11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+    available_set  =  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+    # label = mat73.loadmat(dir_path + "label.mat")['label'].astype(int)[available_set] - 1
+    dir_path = dir_path + "raw_EEG_signals/"
+    # label = loadmat(dir_path + "raw_EEG_Label.mat")['eeg_label'][0][available_set] - 1
+
+    label = np.array([1, 0, 3, 2, 4, 5, 6, 0, 1, 2, 5, 6, 3, 4, 0, 4, 5, 1, 6, 3, 2, 1, 0, 5, 3, 4, 2, 6])
+    print(label)
+    print(len(label))
+    # print(label[available_set])
+    label = np.tile(label, (1, 23, 1))
+    eeg_dirs = ['sunhaozhe', 'liaojiajie', 'taodan', 'wangshu', 'chuliuxi',
+                 'taomengzhu', 'liyanni', 'chenmoran', 'caiyashi', 'yuanlin',
+                 'chenyuanjie', 'panmengmeng', 'liuwei', 'zhangzhenhua', 'linmian',
+                 'liaoshanshan', 'chengmengru', 'miuwenrong', 'weiruyuan', 'hetong',
+                 'wangxiaobo', 'jianghanning', 'jialuhan']
+    eeg_data = [[]]
+    def extend_normal(sample):
+        for i in range(len(sample)):
+            features_min = np.min(sample[i])
+            features_max = np.max(sample[i])
+            sample[i] = (sample[i] - features_min) / (features_max - features_min)
+        return sample
+    for eeg_dir in eeg_dirs:
+        sub_data = []
+        eeg_file_d = dir_path + eeg_dir + "/" + eeg_dir + "_d.mat"
+        eeg_file_dd = dir_path + eeg_dir + "/" + eeg_dir + "_dd.mat"
+        data_d = loadmat(eeg_file_d) ## 1-17
+        data_dd = loadmat(eeg_file_dd) ## 18-34
+        for i in range(0,17):
+            if i in available_set:
+                key = "raw_eeg" + str(i+1)
+                trail_data = data_d[key]
+                # print(trail_data.shape)
+                sub_data.append(decimate(trail_data[:62], q=5, ftype='fir', axis=1))
+        for i in range(17,34):
+            if i in available_set:
+                key = "raw_eeg" + str(i+1)
+                trail_data = data_dd[key]
+                sub_data.append(decimate(trail_data[:62], q=5, ftype='fir', axis=1))
+        sub_data = extend_normal(sub_data)
+        eeg_data[0].append(sub_data)
+    return eeg_data, None, label, 200, 62
+
+def read_mped_feature(dir_path, feature_type="stft"):
+
+    eeg_files = [
+        "caiyashi.mat",     "chenmoran.mat",    "chuliuxi.mat",  "jialuhan.mat",      "liaojiajie.mat",    "linmian.mat",  "liyanni.mat",
+
+        "panmengmeng.mat",  "taodan.mat",      "wangshu.mat",     "weiruyuan.mat",  "zhangzhenhua.mat",
+
+        "chengmengru.mat",  "chenyuanjie.mat",  "hetong.mat",    "jianghanning.mat",  "liaoshanshan.mat",  "liuwei.mat",   "miuwenrong.mat",
+        
+        "sunhaozhe.mat",    "taomengzhu.mat",  "wangxiaobo.mat",  "yuanlin.mat"
+    ]
+
+    trial_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 22, 24, 26, 20, 21, 23, 25, 27, 28, 29]
+
+    label_list = [-1, 1, 0, 3, 2, 4, 5, 6, 0, 1, 2, 5, 6, 3, 4, -1, 0, 4, 5, 1, 1, 0, 6, 5, 3, 3, 2, 4, 2, 6]
+    label = np.array([1, 0, 3, 2, 4, 5, 6, 0, 1, 2, 5, 6, 3, 4, 0, 4, 5, 1, 6, 3, 2, 1, 0, 5, 3, 4, 2, 6])
+    label = np.tile(label, (1, 23, 1))
+    # for i in trial_list:/
+        # print(str(label_list[i])+" ")
+    # data = np.array([])  # 存储每一个subject的数组
+    data = [[]]
+    # label = [[]]
+    # label = np.array([])
+
+    def extend_normal(sample):
+        for i in range(len(sample)):
+            features_min = np.min(sample[i])
+            features_max = np.max(sample[i])
+            sample[i] = (sample[i] - features_min) / (features_max - features_min)
+        return sample
+    for subject in eeg_files:
+        count = 0
+        sub_data = []
+        for i in trial_list:
+            metaData = loadmat(dir_path + subject, verify_compressed_data_integrity=False)
+            trMetaData = metaData['STFT'][0, i].astype('float')
+            trMetaData = np.transpose(trMetaData, (1,0,2))  # (42,62,5)
+
+            count += 1
+            x = np.array(trMetaData)
+            y = np.array([label_list[i], ] * x.shape[0])
+            sub_data.append(extend_normal(x))
+
+        data[0].append(sub_data)
+    return data, None, label, None, 62
+
+def read_mped_de_lds(dir_path):
+    ## 已经处理好的de_lds特征
+    data = pickle.load(dir_path)
+    label = np.array([1, 0, 3, 2, 4, 5, 6, 0, 1, 2, 5, 6, 3, 4, 0, 4, 5, 1, 6, 3, 2, 1, 0, 5, 3, 4, 2, 6])
+    label = np.tile(label, (1, 23, 1))
+    return data, None, label, None, 62
 
 def read_deap_preprocessed(dir_path):
     # 读取deap数据集
@@ -438,9 +602,6 @@ def read_deap_raw(dir_path):
         label[0].append(sub_label)
     return all_raw_data, None, label, 512, 32
 
-
-
-
 def read_dreamer(dir_path, last_seconds = 60, base_seconds = 4):
     # input : 1 file (23 subjects' data)
     # subject data struct :
@@ -477,7 +638,6 @@ def read_dreamer(dir_path, last_seconds = 60, base_seconds = 4):
             # all_stimuli[0][subject][trail] shape : [channel(14), seconds(last_seconds) * sample rate(128)]
             # all_labels[0][subject][trail] shape : [3]
     return all_stimuli, all_base, all_labels, 128, 14
-
 
 def read_hci(dir_path):
     # 30 subjects, [20, 20, 17, 20, 20, 20, 20, 20, 14, 20, 20, 0, 20, 20, 0, 16, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20]
@@ -524,3 +684,4 @@ def read_hci(dir_path):
     filter_d_l_b = [(d,l,b) for d,l,b in zip(data[0], labels[0], base[0]) if l != []]
     data[0], labels[0], base[0] = zip(*filter_d_l_b) if filter_d_l_b else ([],[],[])
     return data, base, labels, 128, 32
+
