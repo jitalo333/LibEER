@@ -1,6 +1,9 @@
+import statistics
+
 import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, f1_score, cohen_kappa_score
+from collections import defaultdict
 
 
 class Metric:
@@ -71,6 +74,67 @@ class Metric:
         else:
             return out
             
+class SubMetric(Metric):
+    def __init__(self,metrics):
+        super().__init__(metrics=metrics)
+        self.sub_labels = []
+    def update(self, outputs, targets, sub_labels, loss=None):
+        # append one batch outputs and targets to all outputs and targets
+        if torch.is_tensor(outputs):
+            self.outputs += outputs.cpu().detach().tolist()
+            self.targets += targets.cpu().detach().tolist()
+            self.sub_labels += sub_labels.cpu().detach().tolist()
+        else:
+            self.outputs += outputs.tolist()
+            self.targets += targets.tolist()
+            self.sub_labels += sub_labels.cpu().detach().tolist()
+        if loss is not None:
+            self.losses.append(loss)
+    def sub_accuracy(self):
+        # this function will return every subject's acc
+        groups = defaultdict(lambda : {"outputs":[], "targets":[]})
+        for o, t, s in zip(self.outputs, self.targets, self.sub_labels):
+            groups[s]["outputs"].append(o)
+            groups[s]["targets"].append(t)
+        result = {}
+        for label in groups:
+            acc = accuracy_score(groups[label]["targets"], groups[label]["outputs"])
+            result[label] = acc
+        return result
+    def sub_macro_f1_score(self):
+        # this function will return every subject's macro-f1
+        groups = defaultdict(lambda: {"outputs": [], "targets": []})
+        for o, t, s in zip(self.outputs, self.targets, self.sub_labels):
+            groups[s]["outputs"].append(o)
+            groups[s]["targets"].append(t)
+        result = {}
+        for label in groups:
+            acc = f1_score(groups[label]["targets"], groups[label]["outputs"], average='macro')
+            result[label] = acc
+        return result
+
+    def accuracy(self):
+        """
+        this function will return the mean and std acc of all subjects
+        :return:
+        """
+        acc_dict =  list(self.sub_accuracy().values())
+        self.values['acc'] = statistics.mean(acc_dict)
+        if len(acc_dict) != 1:
+            self.values['acc_std'] = statistics.stdev(acc_dict)
+        return self.values['acc']
+
+    def macro_f1_score(self):
+        """
+        this function will return the mean and std macro-f1 of all subjects
+        :return:
+        """
+        macro_f1_s = list(self.sub_macro_f1_score().values())
+        self.values['macro-f1'] = np.mean(macro_f1_s)
+        if len(macro_f1_s) != 1:
+            self.values['macro-f1_std'] =  np.std(macro_f1_s)
+        return self.values['macro-f1']
+
 
 
 
