@@ -2,17 +2,28 @@ import torch
 import torch.nn as nn
 import torch.utils.data
 
-REGION_INDEX = [[3,0,1,2,4],[7,8,9,10,11],[5,6],[13,12],[14,15,23,24,32,33],
+SEED_REGION_INDEX = [[3,0,1,2,4],[7,8,9,10,11],[5,6],[13,12],[14,15,23,24,32,33],
                 [22,21,31,30,40,39],[16,17,18,19,20],[25,26,27,28,29],
                 [34,35,36,37,38],[41,42],[49,48],[43,44,45,46,47],
                 [50,51,57],[56,55,61],[52,53,54],[58,59,60]]
-
+DEAP_REGION_INDEX = [
+    [0, 1, 16, 17],
+    [2, 5, 18, 22],
+    [3, 20],
+    [4, 21],
+    [6, 24],
+    [8, 27],
+    [9, 28],
+    [10, 14],
+    [11, 29],
+    [13, 19, 30, 31, 15]
+]
 # From Regional to Global Brain: A Novel Hierarchical Spatial-Temporal Neural Network Model for EEG Emotion Recognition
 # r2gstnn paper link : https://ieeexplore.ieee.org/document/8736804
 # Y. Li, W. Zheng, L. Wang, Y. Zong and Z. Cui, "From Regional to Global Brain: A Novel Hierarchical Spatial-Temporal Neural Network Model for EEG Emotion Recognition," in IEEE Transactions on Affective Computing, vol. 13, no. 2, pp. 568-578, 1 April-June 2022, doi: 10.1109/TAFFC.2019.2922912.
 
 class R2GSTNN(nn.Module):
-    def __init__(self, input_size=5,  num_classes=3, regions=16, region_index=REGION_INDEX, k=3, t=9,
+    def __init__(self, input_size=5,  num_classes=3, regions=16, region_index=SEED_REGION_INDEX, k=3, t=9,
                  regional_size=100, global_size = 150,regional_temporal_size=200, global_temporal_size=250,
                  domain_classes=2, lambda_ = 1,dropout=0.5):
         super(R2GSTNN, self).__init__()
@@ -60,14 +71,26 @@ class R2GSTNN(nn.Module):
 
 
 class RegionFeatureLearner(nn.Module):#input: (batch_size*T, num_electrodes, d)
-    def __init__(self, input_size=5, regional_size=100, regions=16, region_index=REGION_INDEX): 
+    def __init__(self, input_size=5, regional_size=100, regions=16, region_index=None):
         super(RegionFeatureLearner, self).__init__()
+        if region_index is None:
+            region_index = SEED_REGION_INDEX
         self.regions = regions
         self.input_size = input_size
         self.regional_size = regional_size
         self.region_index = [torch.LongTensor(e) for e in region_index]
 
         self.bilstm = nn.ModuleList([nn.LSTM(self.input_size, self.regional_size, batch_first=True, bidirectional=True) for i in range(regions)])
+        for lstm in self.bilstm:
+            for name, param in lstm.named_parameters():
+                if 'weight_hh' in name:
+                    nn.init.orthogonal_(param.data)
+                elif 'weight_ih' in name:
+                    nn.init.xavier_normal_(param.data)
+                elif 'bias' in name:
+                    param.data.zero_()
+                    hidden_size = param.size(0) // 4
+                    param.data[hidden_size:2 * hidden_size].fill_(1.0)
 
     def forward(self, features):
         regional_feature_input =[]
@@ -93,7 +116,13 @@ class RegionAttention(nn.Module):
         self.bias = nn.Parameter(torch.Tensor(self.regions))
         self.Q = nn.Parameter(torch.Tensor(self.regions, self.regions))
         self.softmax = nn.Softmax(dim=1)
+        # 参数初始化
+        self._init_weights()
 
+    def _init_weights(self):
+        nn.init.xavier_normal_(self.P, gain=nn.init.calculate_gain('tanh'))
+        nn.init.orthogonal_(self.Q, gain=1.414)
+        nn.init.zeros_(self.bias)
     def forward(self, regional_feature):
         #regional_feature: (batch_size*T, regions, 2*regional_hidden_size)
         W = self.softmax(torch.matmul(self.tanh(torch.matmul(regional_feature, self.P) + self.bias), self.Q))
@@ -111,20 +140,36 @@ class GlobalFeatureLearner(nn.Module):
         self.global_size = global_size
         self.regions = regions
         self.k = k
-        
         self.bilstm = nn.LSTM(input_size=2*self.regional_size, hidden_size=self.global_size//2, batch_first=True, bidirectional=True)
         self.fc2 = nn.Linear(self.regions, self.k)
         self.relu = nn.ReLU()
+        self._init_weights()
 
+    def _init_weights(self):
+        # 初始化LSTM参数
+        for name, param in self.bilstm.named_parameters():
+            if 'weight_hh' in name:
+                nn.init.orthogonal_(param.data)
+            elif 'weight_ih' in name:
+                nn.init.xavier_normal_(param.data, gain=nn.init.calculate_gain('relu'))  # ReLU增益
+            elif 'bias' in name:
+                param.data.zero_()
+                hidden_size = param.size(0) // 4
+                param.data[hidden_size:2 * hidden_size].fill_(1.0)
+
+        nn.init.kaiming_normal_(self.fc2.weight,
+                                mode='fan_in',
+                                nonlinearity='relu')
+        nn.init.constant_(self.fc2.bias, 0.1)
     def forward(self, attention_feature):
-        #attention_feature: (batch_size*T, regions, 2*regional_hidden_size)
-        hidden_unit = self.bilstm(attention_feature)[0]
-        hidden_unit = hidden_unit.transpose(1,2)
-        global_feature = self.fc2(hidden_unit)
-        global_feature = self.relu(global_feature)
+            #attention_feature: (batch_size*T, regions, 2*regional_hidden_size)
+            hidden_unit = self.bilstm(attention_feature)[0]
+            hidden_unit = hidden_unit.transpose(1,2)
+            global_feature = self.fc2(hidden_unit)
+            global_feature = self.relu(global_feature)
 
-        #global_feature: (batch_size*T, global_hidden_size, k)
-        return global_feature
+            #global_feature: (batch_size*T, global_hidden_size, k)
+            return global_feature
     
 class TemporalFeatureLearner(nn.Module):
     def __init__(self, k=3, t=9,regions=16,regional_size=100, global_size=150,  
@@ -141,7 +186,30 @@ class TemporalFeatureLearner(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.regional_bilstm = nn.LSTM(input_size=2*self.regional_size, hidden_size=self.regional_temporal_size//2, batch_first=True, bidirectional=True)
         self.global_bilstm = nn.LSTM(input_size = self.global_size*self.k, hidden_size=self.global_temporal_size//2, batch_first=True, bidirectional=True)
+        self._init_weights()
 
+    def _init_weights(self):
+        for name, param in self.regional_bilstm.named_parameters():
+            if 'weight_hh' in name:
+                nn.init.orthogonal_(param.data)
+            elif 'weight_ih' in name:
+                nn.init.xavier_normal_(param.data, gain=nn.init.calculate_gain('tanh'))  # tanh激活补偿
+            elif 'bias' in name:
+                param.data.zero_()
+                hidden_size = param.size(0) // 4
+                param.data[hidden_size:2 * hidden_size].fill_(1.0)
+
+
+        for name, param in self.global_bilstm.named_parameters():
+            if 'weight_hh' in name:
+                nn.init.orthogonal_(param.data)
+            elif 'weight_ih' in name:
+
+                nn.init.xavier_normal_(param.data, gain=nn.init.calculate_gain('tanh') / 2)
+            elif 'bias' in name:
+                param.data.zero_()
+                hidden_size = param.size(0) // 4
+                param.data[hidden_size:2 * hidden_size].fill_(1.5)
     def forward(self, regional_feature, global_feature):
         #regional_feature: (batch_size*T, regions, 2*regional_hidden_size)
         #global_feature: (batch_size*T, global_hidden_size, k)
@@ -184,7 +252,26 @@ class Classifer(nn.Module):
                 nn.BatchNorm1d(self.hidden_size2),
                 nn.Linear(in_features=self.hidden_size2, out_features=self.num_classes)
         )
-    
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.kaiming_normal_(self.classifer[0].weight,
+                                mode='fan_in',
+                                nonlinearity='relu')
+        nn.init.constant_(self.classifer[0].bias, 0.1)
+
+        nn.init.kaiming_normal_(self.classifer[3].weight,
+                                mode='fan_in',
+                                nonlinearity='relu')
+        nn.init.constant_(self.classifer[3].bias, 0.05)
+
+        nn.init.xavier_normal_(self.classifer[6].weight,
+                               gain=nn.init.calculate_gain('linear', 0.1))  # 小增益初始化
+        nn.init.constant_(self.classifer[6].bias, 0.0)
+        nn.init.constant_(self.classifer[2].weight, 0.5)
+        nn.init.constant_(self.classifer[2].bias, 0.0)
+        nn.init.constant_(self.classifer[5].weight, 0.5)
+        nn.init.constant_(self.classifer[5].bias, 0.0)
     def forward(self, global_regional_temporal_feature):
         #global_regional_temporal_feature: (batch_size, global_hidden_size+regional_hidden_size*regions)
         label_prediction = self.classifer(global_regional_temporal_feature)
@@ -222,6 +309,19 @@ class Discriminator(nn.Module):
                 #nn.BatchNorm1d(self.hidden_size2),
                 nn.Linear(in_features=self.hidden_size2, out_features=self.domain_classes)
         )
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.orthogonal_(self.discriminator[0].weight, gain=1.414)
+        nn.init.constant_(self.discriminator[0].bias, 0.01)
+        nn.init.kaiming_normal_(self.discriminator[2].weight,
+                                mode='fan_out',
+                                nonlinearity='relu')
+        nn.init.constant_(self.discriminator[2].bias, 0.1)
+
+        nn.init.xavier_normal_(self.discriminator[4].weight,
+                               gain=nn.init.calculate_gain('sigmoid') / 2)
+        nn.init.constant_(self.discriminator[4].bias, -0.1)
 
     def forward(self, source_feature, teaget_feature):
         #source_feature: (batch_size, global_hidden_size+regional_hidden_size*regions)
