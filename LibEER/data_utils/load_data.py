@@ -1,7 +1,7 @@
 import fnmatch
 import json
 import os
-from symbol import trailer
+#from symbol import trailer
 
 import scipy.io
 from scipy.io import loadmat
