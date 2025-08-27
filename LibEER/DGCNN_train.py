@@ -122,7 +122,7 @@ def main(args):
             output_dir = make_output_dir(args, "DGCNN")
             round_metric = train(model=model, dataset_train=dataset_train, dataset_val=dataset_val, dataset_test=dataset_test, device=device,
                                  output_dir=output_dir, metrics=args.metrics, metric_choose=args.metric_choose, optimizer=optimizer,
-                                 batch_size=args.batch_size, epochs=args.epochs, criterion=criterion, test_sub_label=test_sub_label, loss_func=loss_func, loss_param=model)
+                                 batch_size=args.batch_size, epochs=args.epochs, criterion=criterion, loss_func=loss_func, loss_param=model) #test_sub_label=test_sub_label,
             # if sub indep, then return
             best_metrics.append(round_metric)
             if setting.experiment_mode == "subject-dependent":
@@ -134,8 +134,10 @@ def main(args):
     # subjects independent metrics: (round_metric{mean:"",std:""})
     if setting.experiment_mode == "subject-dependent":
         sub_result_log(args, dependent_metrics)
+        print(dependent_metrics)
     else:
         result_log(args, best_metrics)
+        print(best_metrics)
 
 if __name__ == '__main__':
     args = get_args_parser()
