@@ -62,7 +62,7 @@ def get_uniform_data(dataset, dataset_path, test_mode=False):
     :return: data, baseline, label, and sample rate of the original dataset
     """
     func = {
-        "seed_raw": read_seed_raw,
+        "seed_raw": lambda path: read_seed_raw(path, test_mode=test_mode),
         "deap": lambda path: read_deap_preprocessed(path, test_mode=test_mode),
         "dreamer": read_dreamer,
         "deap_raw": read_deap_raw,
