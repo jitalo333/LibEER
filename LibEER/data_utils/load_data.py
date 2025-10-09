@@ -53,7 +53,7 @@ extract_dataset = {
     "seediv_psd_movingAve", "seediv_psd_lds", "faced_de", "faced_psd", "faced_de_lds", "faced_psd_lds","mped_feature","mped_de_lds"
 }
 
-def get_uniform_data(dataset, dataset_path):
+def get_uniform_data(dataset, dataset_path, test_mode=False):
     """
     Mainly aimed at the structure of different datasets,
     it is divided into the form of (session, subject, trail, channel, raw_data).
@@ -63,7 +63,7 @@ def get_uniform_data(dataset, dataset_path):
     """
     func = {
         "seed_raw": read_seed_raw,
-        "deap": read_deap_preprocessed,
+        "deap": lambda path: read_deap_preprocessed(path, test_mode=test_mode),
         "dreamer": read_dreamer,
         "deap_raw": read_deap_raw,
         "seediv_raw": read_seedIV_raw,
@@ -71,7 +71,9 @@ def get_uniform_data(dataset, dataset_path):
         "mped_raw": read_mped_raw,
         "mped_feature": read_mped_feature,
         "mped_de_lds": read_mped_de_lds,
-        "hci": read_hci
+        "hci": read_hci,
+        "escolares": lambda path: read_escolares_preprocessed(path, test_mode=test_mode)
+
     }
     if dataset.startswith("seediv") and dataset != "seediv_raw":
         data, baseline, label, sample_rate, channels = read_seedIV_feature(dataset_path, feature_type=dataset[7:])
@@ -113,7 +115,7 @@ def read_faced_feature(dir_path, feature_type="de", label_type="emotion"):
             data[0][i] = sub_feature
     return data, None, label, None, 32
 
-def read_seed_raw(dir_path):
+def read_seed_raw(dir_path, test_mode=False):
     # input : 45 files(3 sessions, 15 round) containing all 15 trails with a sampling rate of 200 Hz
     # output : EEG signal with a trail as the basic unit and sample rate of the original dataset
     # output shape : (session, subject, trail, channel, raw_data), (session, subject, trail, label)
@@ -143,6 +145,10 @@ def read_seed_raw(dir_path):
     # create the empty list of (3, 15, 15) => (session, subject, trail)
     eeg_data = [[[[] for _ in range(15)] for _ in range(15)] for _ in range(3)]
     # Loop processing of EEG mat files
+    if test_mode:
+        eeg_files = [session[:4] for session in eeg_files]
+        labels = labels[:, :4, :]
+
     for session_files, session_id in zip(eeg_files, range(3)):
         # Create a pool of worker processes
         with mp.Pool(processes=5) as pool:
@@ -505,7 +511,7 @@ def read_mped_de_lds(dir_path):
     label = np.tile(label, (1, 23, 1))
     return data, None, label, None, 62
 
-def read_deap_preprocessed(dir_path):
+def read_deap_preprocessed(dir_path, test_mode=False):
     # 读取deap数据集
     # input file: 32 files contains 32 subject's eeg data
     # output shape : (session(1), subject, trail, channel, raw_data), (session(1), subject, trail, label)
@@ -524,6 +530,9 @@ def read_deap_preprocessed(dir_path):
     pretrail = pre_time * fs
 
     eeg_files = ["s{}.dat".format(str(i).zfill(2)) for i in range(1,33)]
+    if test_mode:
+        eeg_files = eeg_files[:4]
+        
     for s_i, subject_file in enumerate(eeg_files):
         sub_data = pickle.load(open("{}/".format(dir_path)+subject_file, "rb"), encoding="latin")
         baseline = np.mean([sub_data['data'][:,:32,i*fs:(i+1)*fs] for i in range(3)], axis=0)
@@ -688,7 +697,7 @@ def read_hci(dir_path):
     return data, base, labels, 128, 32
 
 ##################### Escolares ############################################
-def read_escolares_preprocessed(dir_path):
+def read_escolares_preprocessed(dir_path, test_mode = False):
     # input file: files contains 48 subject's eeg data
     # output shape : (session(1), subject, trail, channel, raw_data), (session(1), subject, trail, label)
     # under dir, it has .mat file with egg signals, each represent one cluster from a subject
@@ -714,8 +723,13 @@ def read_escolares_preprocessed(dir_path):
     common_rest = group_files_by_name(common_rest)
     ###########For data
     all_EEG = []
-    all_labels = []
-    for group in common_rest[0:4]:
+    all_labels = [] 
+
+    # Test mode: only use first 6 subjects
+    if test_mode:
+        common_rest = common_rest[0:6]
+
+    for group in common_rest:
         subject_data = []
         subject_labels = []
         #Files contains the name of the files containing trials for one subject
