@@ -10,6 +10,14 @@ from sklearn.decomposition import PCA
 
 from functools import partial
 
+#Escolares
+from scipy.io import loadmat
+import time
+import re
+from collections import defaultdict
+import pandas as pd
+import os
+
 
 # 对eeg信号进行各项数据预处理操作（去除眼动干扰，带通滤波，提取频段，分段样本，提取特征, 归一化等）
 # 并且同时
@@ -36,6 +44,7 @@ def preprocess(data, baseline, sample_rate, pass_band, extract_bands, time_windo
         data = feature_extraction(data, sample_rate, extract_bands, time_window, overlap, feature_type)
     data, feature_dim = segment_data(data, sample_length, stride)
     return data, feature_dim
+
 def noise_label(train_label, num_classes=3, level=0.1):
     if type(train_label[0]) is np.ndarray:
         train_label = [np.where(tl==1)[0] for tl in train_label]
@@ -67,7 +76,6 @@ def noise_label(train_label, num_classes=3, level=0.1):
                 noised_label[i] = [0, 1]
     return noised_label
 
-
 def baseline_removal(data, base):
     for ses_i, ses_data in enumerate(data):
         for sub_i, sub_data in enumerate(ses_data):
@@ -82,7 +90,6 @@ def baseline_removal(data, base):
                     trail_data[:,-last:] = trail_data[:,-last:] - base_data[:,:last]
                 data[ses_i][sub_i][trail_i] = trail_data
     return data
-
 
 def bandpass_filter(data, frequency, pass_band):
     """
@@ -148,7 +155,6 @@ def eog_remove(data):
     """
     pca = PCA()
     return data
-
 
 def feature_extraction(data, sample_rate, extract_bands, time_window, overlap, feature_type):
     """
@@ -259,7 +265,6 @@ def de_extraction(data, sample_rate, extract_bands, time_window, overlap):
             t += window_size-noverlap
     return de_data
 
-
 def lds(data):
     """
     Process data using a linear dynamic system approach.
@@ -306,8 +311,6 @@ def lds(data):
 
     # Return the processed data, reshaping it to match the original input shape
     return U.T.reshape((num_t, num_channel, num_feature))
-
-
 
 def segment_data(data, sample_length, stride):
     """
@@ -542,6 +545,7 @@ def generate_rgnn_adjacency_matrix(channel_names, channel_loc, global_channel_pa
     # print((np.where(adjacency_matrix > 0.1)[0].shape[0])/62/62)
     adjacency_matrix = differential_asymmetry_leverage(channel_names, adjacency_matrix, global_channel_pair)
     return adjacency_matrix
+
 def differential_asymmetry_leverage(channel_names, adjacency_matrix, global_channel_pair):
     for pair in global_channel_pair:
         idx1 = np.where(channel_names == pair[0])[0][0]
@@ -550,8 +554,65 @@ def differential_asymmetry_leverage(channel_names, adjacency_matrix, global_chan
         adjacency_matrix[idx2][idx1] -= 1
     return adjacency_matrix
 
+####################### Escolares ####################################
+# Functions to load and preprocess the data from the Escolares dataset
+def preprocess_escolares(data, last = None):
 
+    #Out: data (trial, chann, samples)
+    EEG = data['EEG_data']
+    EEG = np.transpose(EEG, ((2, 0, 1)))
+    if last is not None:
+      EEG = EEG[:, :32, -last:]
+    else:
+      EEG = EEG[:, :32]
+    EEG = EEG.astype(np.float64)
+    return EEG
 
+def load_mat_file(filepath, max_retries=3, if_verbose = False):
+    """Carga un archivo .mat con reintentos en caso de error."""
+    attempt = 0
+    while attempt < max_retries:
+        try:
+            if if_verbose:
+              print(f"Intentando cargar: {filepath} (Intento {attempt + 1})")
+            return loadmat(filepath)  # Devuelve los datos si la carga es exitosa
+        except (OSError, ConnectionAbortedError) as e:
+            print(f"Error al cargar {filepath}: {e}")
+            attempt += 1
+            if attempt < max_retries:
+                print("Reintentando...")
+                time.sleep(2)  # Esperar antes de reintentar
+            else:
+                print(f"No se pudo cargar {filepath} después de {max_retries} intentos.")
+                return None  # Devolver None si la carga falla
+
+def group_files_by_name(files):
+    """
+    Group filenames by the number that appears after 'N' (e.g., N1, N2, ...).
+    """
+    groups = defaultdict(list)
+
+    for f in files:
+        match = re.search(r'N(\d+)', f)
+        if match:
+            n_value = int(match.group(1))
+            groups[n_value].append(f)
+
+    # Convert to list of lists (sorted by N)
+    grouped_list = [groups[k] for k in sorted(groups.keys())]
+    return grouped_list
+
+def filter_by_extension(dir_path, extension):
+    """
+    Return filenames (without extension) that match the given extension.
+    """
+    files = [
+        os.path.splitext(f)[0]
+        for f in os.listdir(dir_path)
+        if f.lower().endswith(extension.lower())
+        and os.path.isfile(os.path.join(dir_path, f))
+    ]
+    return files
 
 
 

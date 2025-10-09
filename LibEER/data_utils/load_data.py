@@ -17,7 +17,9 @@ from scipy.signal import decimate
 
 from data_utils.preprocess import preprocess, label_process
 from .preprocess import lds
-
+#Escolares
+from .preprocess import preprocess_escolares, load_mat_file, group_files_by_name, filter_by_extension
+import pandas as pd
 
 def get_data(setting=None):
     if setting is None:
@@ -685,3 +687,57 @@ def read_hci(dir_path):
     data[0], labels[0], base[0] = zip(*filter_d_l_b) if filter_d_l_b else ([],[],[])
     return data, base, labels, 128, 32
 
+##################### Escolares ############################################
+def read_escolares_preprocessed(dir_path):
+    # input file: files contains 48 subject's eeg data
+    # output shape : (session(1), subject, trail, channel, raw_data), (session(1), subject, trail, label)
+    # under dir, it has .mat file with egg signals, each represent one cluster from a subject
+    # under dir, it has .feather file with labels, each represent one cluster from a subject
+    # every file contains two arrays:
+    # data -> (trail(40), channel(40), data(8064))
+    # label -> (trail(40), label(valence, arousal, dominance, liking))
+
+    #'Fp1'	'Fz'	'F3'	'F7'	'FT9'	'FC5'	'FC1'	'C3'	'T7'	'TP9'	'CP5'	'CP1'	'Pz'	'P3'	'P7'	'O1'	'Oz'	'O2'	'P4'	
+    #'P8'	'TP10'	'CP6'	'CP2'	'Cz'	'C4'	'T8'	'FT10'	'FC6'	'FC2'	'F4'	'F8'	'Fp2'	'PPG'	'GSR'	'TEMP'
+
+    file_group_data = filter_by_extension(dir_path, ".mat")
+    file_group_labels = filter_by_extension(dir_path, ".feather")
+
+    # Extract the "suffix" (the part after the prefix)
+    rest_data = {f.replace('EEG_', '', 1) for f in file_group_data}
+    rest_labels = {f.replace('labels_', '', 1) for f in file_group_labels}
+
+    # Create an intersection based only on the suffix
+    common_rest = rest_data.intersection(rest_labels)
+
+    #Group files by subject
+    common_rest = group_files_by_name(common_rest)
+    ###########For data
+    all_EEG = []
+    all_labels = []
+    for group in common_rest[0:4]:
+        subject_data = []
+        subject_labels = []
+        #Files contains the name of the files containing trials for one subject
+        for file in group:
+            # Data
+            filename = "EEG_" + file + ".mat"
+            data = load_mat_file(os.path.join(dir_path, filename) )
+            EEG = preprocess_escolares(data, last = None) #out: (trial, channel, samples)
+            # Labels
+            filename = "labels_" + file + ".feather"
+            labels = pd.read_feather(os.path.join(dir_path, filename) )
+
+            #Concatenate all trials of one subject
+            subject_data.append(EEG)
+            subject_labels.append(labels)
+
+        # Save data by subject
+        all_EEG.append(np.concatenate(subject_data))
+        all_labels.append(np.concatenate(subject_labels))
+
+    #Create session dimension
+    all_EEG = [all_EEG]
+    all_labels = [all_labels]
+
+    return all_EEG, None, all_labels, 250, 32
