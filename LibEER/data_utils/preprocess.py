@@ -18,6 +18,8 @@ from collections import defaultdict
 import pandas as pd
 import os
 
+from  scipy.signal.windows import hann
+from scipy.fftpack import fft
 
 # 对eeg信号进行各项数据预处理操作（去除眼动干扰，带通滤波，提取频段，分段样本，提取特征, 归一化等）
 # 并且同时
@@ -170,7 +172,8 @@ def feature_extraction(data, sample_rate, extract_bands, time_window, overlap, f
     fe = {
         'psd': psd_extraction,
         'de': de_extraction,
-        'de_reduced': de_reduced_extraction
+        'de_reduced': de_reduced_extraction,
+        'de_fourier': de_extraction_fourier,
     }[feature_type]
     feature_data = []
     for ses_i, ses_data in enumerate(data):
@@ -614,5 +617,118 @@ def filter_by_extension(dir_path, extension):
     ]
     return files
 
+#Extract DE using Fourier Transform
+def split_data_fourier(data, time_window, sample_rate, overlap):
+    """
+    Splits multi-channel time-series data into fixed-length segments
+    (useful for FFT or spectral feature extraction).
 
+    Parameters
+    ----------
+    data : np.ndarray
+        Input array of shape (n_channels, n_samples).
+    time_window : float
+        Window duration in seconds.
+    sample_rate : int or float
+        Sampling frequency (Hz).
+    overlap : float
+        Fraction of overlap between windows (0–1). Currently unused.
+
+    Returns
+    -------
+    segmented_data : np.ndarray
+        Array of shape (n_blocks, n_channels, window_len).
+        Each block contains one time segment ready for FFT or feature computation.
+    """
+
+    # Window length in samples
+    window_len = int(time_window * sample_rate)
+
+    # Total number of samples
+    total_samples = data.shape[1]
+
+    # Remove extra samples that don't fit exactly into windows
+    extra = total_samples % window_len
+    data_trimmed = data[:, extra:]
+
+    # Number of complete blocks
+    num_blocks = data_trimmed.shape[1] // window_len
+
+    # Reshape into (channels, blocks, window_len)
+    segmented_data = data_trimmed.reshape(data.shape[0], num_blocks, window_len)
+
+    # Reorder to (blocks, channels, window_len)
+    segmented_data = np.transpose(segmented_data, (1, 0, 2))
+
+    return segmented_data
+
+def de_extraction_fourier(data_trial, sample_rate, extract_bands, time_window, overlap):
+    """
+    Computes Differential Entropy (DE) features from EEG or multichannel signals 
+    using Fourier-based spectral decomposition.
+
+    Parameters
+    ----------
+    data_trial : np.ndarray
+        Input array of shape (n_channels, n_samples).
+        Each row is one electrode/channel, and each column is a time point.
+    sample_rate : int or float
+        Sampling frequency of the signal (Hz).
+    extract_bands : list of tuples
+        List of frequency bands [(f_start, f_end), ...] in Hz 
+        used for DE computation (e.g., delta, theta, alpha, beta, gamma).
+    time_window : float
+        Duration of each analysis window in seconds.
+    overlap : float
+        Fraction of overlap between consecutive windows (0–1). 
+        Currently not applied.
+
+    Returns
+    -------
+    de_features : np.ndarray
+        3D array of shape (n_windows, n_channels, n_bands)
+        containing the differential entropy values for each 
+        channel, window, and frequency band.
+
+    Notes
+    -----
+    - Uses a Hanning window for spectral smoothing.
+    - STFTN is set equal to the sampling rate (1 Hz frequency resolution).
+    """
+
+    # --- Initialize parameters ---
+    fStart, fEnd = map(list, zip(*extract_bands))
+    STFTN = sample_rate  # frequency resolution = 1 Hz
+
+    # Convert frequency limits (Hz) to FFT bin indices
+    fStartNum = (np.array(fStart) / sample_rate * STFTN).astype(int)
+    fEndNum   = (np.array(fEnd)   / sample_rate * STFTN).astype(int)
+    
+    # Create Hanning window
+    Hlength = int(time_window * sample_rate)
+    Hwindow = hann(Hlength)
+    
+    de_trial = []
+
+    # --- Segment data into time windows ---
+    data_trial = split_data_fourier(np.array(data_trial), time_window, sample_rate, overlap)
+
+    # --- Compute DE for each time window ---
+    for data in data_trial:
+        n = data.shape[0]  # number of channels
+
+        # Apply window and compute FFT
+        Hdata = data * Hwindow
+        FFTdata = fft(Hdata, STFTN)
+        magFFTdata = abs(FFTdata[:, 0:int(STFTN / 2)])  # keep positive frequencies
+
+        # Compute energy and DE per frequency band
+        de = np.zeros((n, len(fStart)))
+        for i, (start, end) in enumerate(zip(fStartNum, fEndNum)):
+            band = magFFTdata[:, start:end]             # (n_channels, band_width)
+            E = np.sum(band**2, axis=1) / (end - start + 1)  # average energy
+            de[:, i] = np.log2(100 * E)                 # differential entropy
+        de_trial.append(de)
+
+    return np.array(de_trial)
 
