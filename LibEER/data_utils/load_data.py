@@ -737,7 +737,7 @@ def read_escolares_preprocessed(dir_path, test_mode = False):
             # Data
             filename = "EEG_" + file + ".mat"
             data = load_mat_file(os.path.join(dir_path, filename) )
-            EEG = preprocess_escolares(data, last = None) #out: (trial, channel, samples)
+            EEG = preprocess_escolares(data) #out: (trial, channel, samples)
             # Labels
             filename = "labels_" + file + ".feather"
             labels = pd.read_feather(os.path.join(dir_path, filename) )
