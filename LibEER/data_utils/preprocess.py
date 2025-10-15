@@ -559,15 +559,15 @@ def differential_asymmetry_leverage(channel_names, adjacency_matrix, global_chan
 
 ####################### Escolares ####################################
 # Functions to load and preprocess the data from the Escolares dataset
-def preprocess_escolares(data, last = None):
+def preprocess_escolares(data, delete_baseline = True):
 
     #Out: data (trial, chann, samples)
     EEG = data['EEG_data']
     EEG = np.transpose(EEG, ((2, 0, 1)))
-    if last is not None:
-      EEG = EEG[:, :32, -last:]
-    else:
-      EEG = EEG[:, :32]
+    # --- Delete baseline (first second) ---
+    if delete_baseline:
+        EEG = EEG[:, :, 250:]
+
     EEG = EEG.astype(np.float64)
     return EEG
 
@@ -710,8 +710,6 @@ def de_extraction_fourier(data_trial, sample_rate, extract_bands, time_window, o
     
     de_trial = []
 
-    # --- Delete baseline (first second) ---
-    data_trial = data_trial[sample_rate:]
     # --- Segment data into time windows ---
     data_trial = split_data_fourier(np.array(data_trial), time_window, sample_rate, overlap)
 
