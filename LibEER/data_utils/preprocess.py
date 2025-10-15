@@ -710,6 +710,8 @@ def de_extraction_fourier(data_trial, sample_rate, extract_bands, time_window, o
     
     de_trial = []
 
+    # --- Delete baseline (first second) ---
+    data_trial = data_trial[sample_rate:]
     # --- Segment data into time windows ---
     data_trial = split_data_fourier(np.array(data_trial), time_window, sample_rate, overlap)
 
