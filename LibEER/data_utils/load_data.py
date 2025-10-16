@@ -39,12 +39,11 @@ def get_data(setting=None):
     all_data, all_label, num_classes = label_process(data=all_data, label=label, bounds=setting.bounds, onehot=setting.onehot, label_used=setting.label_used)
     return all_data, all_label, channels, feature_dim, num_classes
 
-
 available_dataset = [
     "seed_raw", "seediv_raw", "deap", "deap_raw", "hci", "dreamer", "seed_de", "seed_de_lds", "seed_psd", "seed_psd_lds", "seed_dasm", "seed_dasm_lds"
     , "seed_rasm", "seed_rasm_lds", "seed_asm", "seed_asm_lds", "seed_dcau", "seed_dcau_lds", "seediv_de_lds", "seediv_de_movingAve",
     "seediv_psd_movingAve", "seediv_psd_lds", "faced_de", "faced_psd", "faced_de_lds", "faced_psd_lds", "seedv_raw", "seedv_de", "mped_raw","mped_feature",
-    "mped_de_lds"
+    "mped_de_lds", "escolares"
 ]
 
 extract_dataset = {
@@ -697,7 +696,7 @@ def read_hci(dir_path):
     return data, base, labels, 128, 32
 
 ##################### Escolares ############################################
-def read_escolares_preprocessed(dir_path, test_mode = False):
+def read_escolares_preprocessed(dir_path, test_mode = False, select_labels = None):
     # input file: files contains 48 subject's eeg data
     # output shape : (session(1), subject, trail, channel, raw_data), (session(1), subject, trail, label)
     # under dir, it has .mat file with egg signals, each represent one cluster from a subject
@@ -741,6 +740,12 @@ def read_escolares_preprocessed(dir_path, test_mode = False):
             # Labels
             filename = "labels_" + file + ".feather"
             labels = pd.read_feather(os.path.join(dir_path, filename) )
+            
+            if select_labels is not None:
+                labels = labels[select_labels]
+            else:
+                # Select only 'Valence', 'Arousal', 'Dominance'
+                labels = labels[['Valence', 'Arousal', 'Dominance']]
 
             #Concatenate all trials of one subject
             subject_data.append(EEG)
