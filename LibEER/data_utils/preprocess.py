@@ -368,25 +368,56 @@ def segment_data(data, sample_length, stride):
         elif len(seg_data[0][0][0].shape) == 3:
             return seg_data, len(seg_data[0][0][0][0][0])
 
-def label_process(data, label, bounds=None, onehot=True, label_used=None):
+def label_process(data, label, bounds=None, onehot=True, label_used=None, binary=True):
     """
-    input shape -> data: (session, subject, trail, sample)
-                   label: (session, subject, trail)
-    output shape -> data: (session, subject, trail, sample)
-                    label: (session, subject, trail, sample)
-    bounds shape -> 2, high emotion state > bounds[1], low emotion state < bounds[0]
-    if dataset is hci, deap, dreamer, then label will be ordered by valence, arousal, dominance, liking
+    Processes and discretizes continuous emotional labels (e.g., Valence, Arousal) 
+    into categorical classes, and assigns them across all samples in a trial.
+    
+    Args:
+        data (list): EEG/Physiological data with shape (session, subject, trail, sample).
+        label (list): Continuous or discrete labels with shape (session, subject, trail).
+        bounds (tuple, optional): (low_bound, high_bound) for discretization. 
+                                  Low state < bounds[0], High state > bounds[1].
+        onehot (bool, optional): If True, output labels are one-hot encoded. Defaults to True.
+        label_used (list, optional): List of emotional dimensions to use (e.g., ['valence', 'arousal']).
+                                     Defaults to ['valence'].
+        binary (bool, optional): If True, discretizes into two classes (Low/High) and discards the middle range.
+                                 If False, discretizes into three classes (Low/Medium/High) and keeps all data. 
+                                 Defaults to True.
+
+    Returns:
+        tuple: (new_data, new_label, num_classes).
+        - new_data: Processed data (discarded trials removed). Shape: (session, subject, trail, sample).
+        - new_label: Processed labels, duplicated across samples. Shape: (session, subject, trail, sample) or (session, subject, trail, sample, classes).
+        - num_classes: Total number of discrete classes.
     """
     available_label = ['valence', 'arousal', 'dominance', 'liking']
     if label_used is None:
         label_used = ['valence']
+
+    # Get the index (position) of the labels to be used
     used_id = [available_label.index(item) for item in label_used]
-    if type(label[0][0][0]) is np.ndarray:
-        num_classes = np.power(2, len(used_id))
+    
+    # Determine the number of states per emotion and total classes
+    num_emotions = len(used_id)
+    if binary:
+        # 2 states (Low=0, High=1) per emotion -> 2^N combined classes
+        num_states_per_emotion = 2
     else:
+        # 3 states (Low=0, Mid=1, High=2) per emotion -> 3^N combined classes
+        num_states_per_emotion = 3
+
+    if type(label[0][0][0]) is np.ndarray:
+        # Calculate the total number of combined classes (e.g., 2^2=4 or 3^2=9)
+        num_classes = np.power(num_states_per_emotion, num_emotions)
+    else:
+        # Handle already discrete datasets (not array-based continuous ratings)
         num_classes = len(np.unique(label))
+
     new_label = []
     new_data = []
+
+    # Iterate through sessions, subjects, and trials
     for ses_i, ses_label in enumerate(label):
         new_ses_label = []
         new_ses_data = []
@@ -394,37 +425,69 @@ def label_process(data, label, bounds=None, onehot=True, label_used=None):
             new_sub_label = []
             new_sub_data = []
             for trail_i, trail_label in enumerate(sub_label):
-                new_trail_label = []
                 new_trail_data = data[ses_i][sub_i][trail_i]
                 num_sample = len(new_trail_data)
+
                 if type(trail_label) is np.ndarray:
                     pro_label = []
+                    
+                    # Discretization Logic: Map continuous value to a discrete state (0, 1, or 2)
                     for value_id in used_id:
                         value = trail_label[value_id]
+                        state = None
+
                         if value <= bounds[0]:
-                            pro_label.append(0)
+                            # Low state (Class 0)
+                            state = 0
                         elif value >= bounds[1]:
-                            pro_label.append(1)
-                    # pro_label shape -> (num_used_label, 2)
-                    # processing into the ordinary labels
-                    if len(pro_label) == len(used_id):
-                        trail_label = int("".join(str(i)for i in pro_label),2)
+                            # High state (Class 1 if binary, Class 2 if ternary)
+                            state = 1 if binary else 2
+                        elif not binary:
+                            # Medium/Neutral state (Class 1, only in ternary mode)
+                            state = 1
+                        
+                        if state is not None:
+                            pro_label.append(state)
+
+                    # Discard/Keep Logic based on 'binary' parameter
+                    # In binary mode (True), trials in the middle range (unclassified) are discarded.
+                    if binary and len(pro_label) != num_emotions:
+                        continue  # Discard the data and label for this trial
+                    
+                    # If ternary (binary=False), all trials are classified (0, 1, or 2) and kept.
+                    
+                    
+                    # Combine the discrete states into a single numerical label
+                    if binary:
+                        # Convert list of 0s and 1s to a base-2 integer (e.g., [1, 0] -> "10" -> 2)
+                        trail_label = int("".join(str(i) for i in pro_label), 2)
                     else:
-                        # discard the data and label
-                        continue
+                        # Convert list of 0s, 1s, and 2s to a base-3 integer for combined classes
+                        combined_label = 0
+                        for i, state in enumerate(pro_label):
+                            # The combination formula for base-N
+                            combined_label += state * (num_states_per_emotion ** (num_emotions - 1 - i))
+                        trail_label = combined_label
+                
+                # Format the label (One-Hot or Integer) and duplicate it for every sample
                 if onehot:
-                    oh_code = np.zeros((1,num_classes), dtype='int32')
-                    # print(trail_label)
+                    oh_code = np.zeros((1, num_classes), dtype='int32')
                     oh_code[0][trail_label] = 1
                     trail_label = oh_code
+                    # Tile/duplicate the one-hot vector for the duration of the trial
                     new_trail_label = np.tile(trail_label, (num_sample, 1))
                 else:
                     trail_label = np.ones(1, dtype='int32') * trail_label
+                    # Tile/duplicate the integer label for the duration of the trial
                     new_trail_label = np.tile(trail_label, num_sample)
+                    
+                # Store the processed data and label for this trial
                 new_sub_data.append(new_trail_data)
                 new_sub_label.append(new_trail_label)
+                
             new_ses_label.append(new_sub_label)
             new_ses_data.append(new_sub_data)
+            
         new_label.append(new_ses_label)
         new_data.append(new_ses_data)
 
