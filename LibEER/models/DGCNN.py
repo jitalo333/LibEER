@@ -12,7 +12,7 @@ param_path = 'config/model_param/DGCNN.yaml'
 
 
 class DGCNN(nn.Module):
-    def __init__(self, num_electrodes=62, in_channels=5, num_classes=3, k=2, relu_is=1, layers=None, dropout_rate=0.5):
+    def __init__(self, num_electrodes=62, in_channels=5, num_classes=3, k=2, relu_is=1, layers=None, dropout_rate=0.5, verbose = False):
         # num_electrodes(int): The number of electrodes.
         # in_channels(int): The feature dimension of each electrode.
         # num_classes(int): The number of classes to predict.
@@ -20,6 +20,7 @@ class DGCNN(nn.Module):
         # relu_is(int): The function we use
         # out_channel(int): The feature dimension of  the graph after GCN.
         super(DGCNN, self).__init__()
+        self.verbose = verbose
 
         self.dropout_rate = dropout_rate
         self.layers = layers
@@ -63,18 +64,20 @@ class DGCNN(nn.Module):
             self.relu_is = model_param['params']['relu_is']
             self.layers = model_param['params']['layers']
             self.dropout_rate = model_param['params']['dropout']
-            print("\nUsing setting from {}\n".format(param_path))
+            if self.verbose:
+                print("\nUsing setting from {}\n".format(param_path))
         except IOError:
-            print("\n{} may not exist or not available".format(param_path))
-
-        print("DGCNN Model, Parameters:\n")
-        print("{:45}{:20}".format("k (The order of Chebyshev polynomials):", self.k))
-        print("{:45}{:20}".format("relu_is (The type of B_Relu func):", self.relu_is))
-        print("{:45}{:20}".format("layers (The channels of each layers):", str(self.layers)))
-        print("{:45}{:20}\n".format("dropout rate:", self.dropout_rate))
-        if self.k != 2 or self.relu_is != 1 or self.layers != [128] or self.dropout_rate != 0.5:
-            print("Not Using Default Setting, the performance may be not the best")
-        print("Starting......")
+            if self.verbose:
+                print("\n{} may not exist or not available".format(param_path))
+        if self.verbose:
+            print("DGCNN Model, Parameters:\n")
+            print("{:45}{:20}".format("k (The order of Chebyshev polynomials):", self.k))
+            print("{:45}{:20}".format("relu_is (The type of B_Relu func):", self.relu_is))
+            print("{:45}{:20}".format("layers (The channels of each layers):", str(self.layers)))
+            print("{:45}{:20}\n".format("dropout rate:", self.dropout_rate))
+            if self.k != 2 or self.relu_is != 1 or self.layers != [128] or self.dropout_rate != 0.5:
+                print("Not Using Default Setting, the performance may be not the best")
+            print("Starting......")
 
     def init_weight(self):
         nn.init.xavier_uniform_(self.adj)

@@ -55,6 +55,8 @@ def de_extraction_fourier(data_trial, sample_rate, extract_bands,  time_window, 
     Hwindow=hann(Hlength)
     #Hwindow= np.array([0.5 - 0.5 * np.cos(2 * np.pi * n / (Hlength+1)) for n in range(1,Hlength+1)])
     de_trial = []
+    #Segment data and compute DE for each segment
+    data_trial = segment_data(data_trial, time_window, sample_rate, overlap)
     for data in data_trial:
         #Compute differential entropy
         n=data.shape[0]
