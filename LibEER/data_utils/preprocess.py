@@ -680,7 +680,7 @@ def filter_by_extension(dir_path, extension):
     ]
     return files
 
-#Extract DE using Fourier Transform
+# Extract DE using Fourier Transform
 def split_data_fourier(data, time_window, sample_rate, overlap):
     """
     Splits multi-channel time-series data into fixed-length segments
@@ -795,3 +795,171 @@ def de_extraction_fourier(data_trial, sample_rate, extract_bands, time_window, o
 
     return np.array(de_trial)
 
+# Uniform channels order
+transform_escolares = {
+    #escolares / deap
+    'fp1': 'fp1',
+    'ft9': 'af3',
+    'f3': 'f3',
+    'f7': 'f7',
+    'fc5': 'fc5',
+    'fc1': 'fc1',
+    'c3': 'c3',
+    't7': 't7',
+    'cp5': 'cp5',
+    'cp1': 'cp1',
+    'p3': 'p3',
+    'p7': 'p7',
+    'tp9': 'po3',
+    'o1': 'o1',
+    'oz': 'oz',
+    'pz': 'pz',
+    'fp2': 'fp2',
+    'ft10': 'af4',
+    'fz': 'fz',
+    'f4': 'f4',
+    'f8': 'f8',
+    'fc6': 'fc6',
+    'fc2': 'fc2',
+    'cz': 'cz',
+    'c4': 'c4',
+    't8': 't8',
+    'cp6': 'cp6',
+    'cp2': 'cp2',
+    'p4': 'p4',
+    'p8': 'p8',
+    'tp10': 'po4',
+    'o2': 'o2',
+    'ppg': None,
+    'gsr': None,
+    'temp': None}
+
+transform_SEED = {
+    # seed / deap
+    'fp1': 'fp1',
+    'af3': 'af3',
+    'f3': 'f3',
+    'f7': 'f7',
+    'fc5': 'fc5',
+    'fc1': 'fc1',
+    'c3': 'c3',
+    't7': 't7',
+    'cp5': 'cp5',
+    'cp1': 'cp1',
+    'p3': 'p3',
+    'p7': 'p7',
+    'po3': 'tp9',
+    'o1': 'o1',
+    'oz': 'oz',
+    'pz': 'pz',
+    'fp2': 'fp2',
+    'af4': 'af4',
+    'fz': 'fz',
+    'f4': 'f4',
+    'f8': 'f8',
+    'fc6': 'fc6',
+    'fc2': 'fc2',
+    'cz': 'cz',
+    'c4': 'c4',
+    't8': 't8',
+    'cp6': 'cp6',
+    'cp2': 'cp2',
+    'p4': 'p4',
+    'p8': 'p8',
+    'po4': 'po4',
+    'o2': 'o2',
+    'ft8': None,
+    'p5': None,
+    'poz': None,
+    'fc4': None,
+    'p6': None,
+    'p2': None,
+    'tp7': None,
+    'f1': None,
+    'f2': None,
+    'fcz': None,
+    'c6': None,
+    'po7': None,
+    'p1': None,
+    'f6': None,
+    'c2': None,
+    'cb1': None,
+    'c1': None,
+    'cp4': None,
+    'fpz': None,
+    'po5': None,
+    'cp3': None,
+    'cpz': None,
+    'po8': None,
+    'cb2': None,
+    'c5': None,
+    'f5': None,
+    'ft7': None,
+    'po6': None,
+    'tp8': None,
+    'fc3': None}
+
+channels_escolares = ['fp1', 'fz', 'f3', 'f7', 'ft9', 'fc5', 'fc1', 'c3', 't7', 'tp9', 'cp5', 'cp1', 'pz', 'p3', 'p7', 'o1', 'oz', 'o2', 'p4', 'p8', 'tp10', 'cp6', 'cp2', 'cz', 'c4', 't8', 'ft10', 'fc6', 'fc2', 'f4', 'f8', 'fp2', 'ppg', 'gsr', 'temp']
+channels_DEAP = ['fp1', 'af3', 'f3', 'f7', 'fc5', 'fc1', 'c3', 't7', 'cp5', 'cp1', 'p3', 'p7', 'po3', 'o1', 'oz', 'pz', 'fp2', 'af4', 'fz', 'f4', 'f8', 'fc6', 'fc2', 'cz', 'c4', 't8', 'cp6', 'cp2', 'p4', 'p8', 'po4', 'o2']
+channels_SEED = ['fp1', 'fpz', 'fp2', 'af3', 'af4', 'f7', 'f5', 'f3', 'f1', 'fz', 'f2', 'f4', 'f6', 'f8', 'ft7', 'fc5', 'fc3', 'fc1', 'fcz', 'fc2', 'fc4', 'fc6', 'ft8', 't7', 'c5', 'c3', 'c1', 'cz', 'c2', 'c4', 'c6', 't8', 'tp7', 'cp5', 'cp3', 'cp1', 'cpz', 'cp2', 'cp4', 'cp6', 'tp8', 'p7', 'p5', 'p3', 'p1', 'pz', 'p2', 'p4', 'p6', 'p8', 'po7', 'po5', 'po3', 'poz', 'po4', 'po6', 'po8', 'cb1', 'o1', 'oz', 'o2', 'cb2']
+
+
+def get_order_idx(channels_escolares, channels_SEED, transform_escolares):
+    """
+    Returns the original indices of 'escolares' channels that have a valid 
+    corresponding channel in 'channels_SEED'.
+
+    Args:
+        channels_escolares (list): A list of channel names in their original order.
+        channels_SEED (list): A list of target channel names (currently unused, but kept for context).
+        transform_escolares (dict): A mapping from an 'escolares' channel name 
+                                    to its corresponding 'SEED' channel name or None.
+
+    Returns:
+        list: A list of integer indices representing the position of the matched 
+              'escolares' channels in the 'channels_escolares' list.
+    """
+    new_idx_order = []
+    # Read channels escolares in SEED order
+    for ch_escolar in transform_escolares.keys():
+        ch_seed = transform_escolares[ch_escolar]
+        if ch_seed is not None:
+            #Get original position idx from channels_escolares
+            new_idx_order.append(channels_escolares.index(ch_escolar))
+    return new_idx_order
+
+def reorder_and_reduce_channels(data, new_idx_order):
+    """
+    Reorders and reduces the channel dimension of a subject's data using NumPy advanced indexing.
+    
+    The resulting data will have a smaller number of channels if 'new_idx_order' 
+    contains fewer indices than the original data's channel count.
+
+    Args:
+        data (np.ndarray): Subject data with dimensions (trials, time, channels, bands).
+        new_idx_order (list or np.ndarray): A list or array of integers specifying the 
+                                            new desired order of channels. Indices for channels 
+                                            to be dropped must be omitted from this list.
+
+    Returns:
+        np.ndarray: The data with channels reordered and potentially reduced.
+                    Dimensions: (trials, time, new_channel_count, bands).
+    """
+    data = np.array(data)
+    reordered_data = data[:, :, new_idx_order, :]
+    
+    return reordered_data
+
+def reorder_channels_escolares(data, channels_escolares, channels_SEED, transform_escolares):
+    # Get idx from the new data order
+    new_idx_order = get_order_idx(channels_escolares, channels_SEED, transform_escolares)
+    print(new_idx_order)
+
+    # Reorder data
+    new_data = []
+    for subject in range(len(data[0])):
+      new_data.append(reorder_and_reduce_channels(data[0][subject], new_idx_order))
+
+    new_data = [new_data]
+    
+    return new_data
