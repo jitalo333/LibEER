@@ -88,10 +88,12 @@ def get_split_index(data, label, setting=None):
                 test_num = int(setting.test_size * total_length)
                 val_num = int(setting.val_size * total_length)
                 train_num = int((1-setting.test_size-setting.val_size)*total_length)
+                
                 tts['test'][0].extend(indexes[:test_num])
                 tts['val'][0].extend(indexes[test_num:test_num+val_num])
                 tts['train'][0].extend(indexes[test_num+val_num:test_num+val_num+train_num])
                 others.extend(indexes[test_num+val_num+train_num:])
+            """
             if len(others) != 0:
                 random.shuffle(others)
                 expect_test_num = int(len(label) * setting.test_size)
@@ -101,6 +103,7 @@ def get_split_index(data, label, setting=None):
                 tts['test'][0].extend(others[:test_num])
                 tts['val'][0].extend(others[test_num:test_num+val_num])
                 tts['train'][0].extend(others[test_num+val_num:])
+            """
         else:
             tts['test'] = [[]]
             tts['train'] = [[]]
