@@ -48,7 +48,7 @@ def MinMax_scaler_channel(X_train, X_test):
     return scale(X_train), scale(X_test)
 
 class Pytorch_Pipeline():
-      def __init__(self, model_class, sample_weights_loss=None, max_epochs = 200):
+    def __init__(self, model_class, sample_weights_loss=None, max_epochs = 200):
         self.model_class = model_class
         self.model = None
         self.params = None
@@ -60,8 +60,7 @@ class Pytorch_Pipeline():
         self.max_epochs = max_epochs
         self.scaler = None
 
-
-      def partial_fit(self, loader):
+    def partial_fit(self, loader):
         self.model.to(self.device)
         self.model.train()
 
@@ -74,139 +73,139 @@ class Pytorch_Pipeline():
 
         return self
 
-      def predict(self, X):
-          self.model.eval()
-          if self.scaler is not None:
-            X = self.scaler.transform(X)
-          X_tensor = torch.tensor(X, dtype=torch.float32)
-          dataset = TensorDataset(X_tensor)
-          loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+    def predict(self, X):
+        self.model.eval()
+        if self.scaler is not None:
+        X = self.scaler.transform(X)
+        X_tensor = torch.tensor(X, dtype=torch.float32)
+        dataset = TensorDataset(X_tensor)
+        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
-          preds = []
-          with torch.no_grad():
-              for xb in loader:
-                  xb = xb[0].to(self.device)
-                  pred = self.model(xb)
-                  preds.append(pred.cpu().numpy())
-          preds = np.concatenate(preds, axis=0)
-          return np.argmax(preds, axis=1)
+        preds = []
+        with torch.no_grad():
+            for xb in loader:
+                xb = xb[0].to(self.device)
+                pred = self.model(xb)
+                preds.append(pred.cpu().numpy())
+        preds = np.concatenate(preds, axis=0)
+        return np.argmax(preds, axis=1)
 
-      def predict_and_evaluate(self, loader):
-          self.model.eval()
-          val_loss, n_samples = 0.0, 0
-          all_preds, all_targets = [], []
-          with torch.no_grad():
-              for xb, yb in loader:
-                  xb, yb = xb.to(self.device), yb.to(self.device)
-                  output = self.model(xb)
-                  loss = self.criterion(output, yb)
-                  val_loss += self.criterion(output, yb).item() * xb.size(0)
-                  n_samples += xb.size(0)
+    def predict_and_evaluate(self, loader):
+        self.model.eval()
+        val_loss, n_samples = 0.0, 0
+        all_preds, all_targets = [], []
+        with torch.no_grad():
+            for xb, yb in loader:
+                xb, yb = xb.to(self.device), yb.to(self.device)
+                output = self.model(xb)
+                loss = self.criterion(output, yb)
+                val_loss += self.criterion(output, yb).item() * xb.size(0)
+                n_samples += xb.size(0)
 
-                  pred = output.argmax(dim=1)
-                  all_preds.append(pred.cpu())
-                  all_targets.append(yb.cpu())
+                pred = output.argmax(dim=1)
+                all_preds.append(pred.cpu())
+                all_targets.append(yb.cpu())
 
-          avg_val_loss = val_loss / n_samples
-          y_true = torch.cat(all_targets).numpy()
-          y_pred = torch.cat(all_preds).numpy()
-          f1 = f1_score(y_true, y_pred, average='weighted')  # weighted F1
+        avg_val_loss = val_loss / n_samples
+        y_true = torch.cat(all_targets).numpy()
+        y_pred = torch.cat(all_preds).numpy()
+        f1 = f1_score(y_true, y_pred, average='weighted')  # weighted F1
 
-          return avg_val_loss, f1, y_true, y_pred
+        return avg_val_loss, f1, y_true, y_pred
 
-      def set_params(self, **params):
-          self.params = params
+    def set_params(self, **params):
+        self.params = params
 
-          # Obtener los parámetros esperados por el constructor de model_class
-          signature = inspect.signature(self.model_class.__init__)
-          valid_keys = set(signature.parameters.keys()) - {'self'}
+        # Obtener los parámetros esperados por el constructor de model_class
+        signature = inspect.signature(self.model_class.__init__)
+        valid_keys = set(signature.parameters.keys()) - {'self'}
 
-          # Filtrar los params para incluir solo los esperados
-          filtered_params = {k: v for k, v in params.items() if k in valid_keys}
+        # Filtrar los params para incluir solo los esperados
+        filtered_params = {k: v for k, v in params.items() if k in valid_keys}
 
-          self.model = self.model_class(**filtered_params)
-          self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.params['lr'])
-          self.batch_size = self.params['batch_size']
+        self.model = self.model_class(**filtered_params)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.params['lr'])
+        self.batch_size = self.params['batch_size']
 
-      def set_criterion(self, y):
-          # ----------- Criterion -----------
-          if self.sample_weights_loss is not None:
-              class_weights = get_sample_weights_loss(y)
-              class_weights = torch.tensor(class_weights, dtype=torch.float32).to(self.device)
-              self.criterion = nn.CrossEntropyLoss(weight=class_weights)
-          else:
-              self.criterion = nn.CrossEntropyLoss()
+    def set_criterion(self, y):
+        # ----------- Criterion -----------
+        if self.sample_weights_loss is not None:
+            class_weights = get_sample_weights_loss(y)
+            class_weights = torch.tensor(class_weights, dtype=torch.float32).to(self.device)
+            self.criterion = nn.CrossEntropyLoss(weight=class_weights)
+        else:
+            self.criterion = nn.CrossEntropyLoss()
 
-          return self
+        return self
 
-      def set_scaler_transform(self, scaler, X_train, X_test, dtype = 'Tabular'):
-          # ----------- Escalado de datos -----------
-          if dtype == 'Tabular':
-            if scaler == 'standard':
-                self.scaler = StandardScaler()
-                X_train = self.scaler.fit_transform(X_train)
-                X_test = self.scaler.transform(X_test)
-            elif scaler == 'minmax':
-                self.scaler = MinMaxScaler()
-                X_train = self.scaler.fit_transform(X_train)
-                X_test = self.scaler.transform(X_test)
-            else: pass
-
-
-          elif dtype == 'MultiDim_TimeSeries':
-            if scaler == 'standard':
-                X_train, X_test = Standard_scaler_channel(X_train, X_test)
-            elif scaler == 'minmax':
-                X_train, X_test = MinMax_scaler_channel(X_train, X_test)
-            else: pass
-
-          return X_train, X_test
+    def set_scaler_transform(self, scaler, X_train, X_test, dtype = 'Tabular'):
+        # ----------- Escalado de datos -----------
+        if dtype == 'Tabular':
+        if scaler == 'standard':
+            self.scaler = StandardScaler()
+            X_train = self.scaler.fit_transform(X_train)
+            X_test = self.scaler.transform(X_test)
+        elif scaler == 'minmax':
+            self.scaler = MinMaxScaler()
+            X_train = self.scaler.fit_transform(X_train)
+            X_test = self.scaler.transform(X_test)
+        else: pass
 
 
-      def set_scaler(self, scaler):
-          # ----------- Escalado de datos -----------
-          if scaler == 'standard':
-              self.scaler = StandardScaler()
+        elif dtype == 'MultiDim_TimeSeries':
+        if scaler == 'standard':
+            X_train, X_test = Standard_scaler_channel(X_train, X_test)
+        elif scaler == 'minmax':
+            X_train, X_test = MinMax_scaler_channel(X_train, X_test)
+        else: pass
 
-          elif scaler == 'minmax':
-              self.scaler = MinMaxScaler()
+        return X_train, X_test
 
-          else:
-              return None
+    def set_scaler(self, scaler):
+        # ----------- Escalado de datos -----------
+        if scaler == 'standard':
+            self.scaler = StandardScaler()
 
-      def fit_early_stopping(self, X_train, y_train, X_test, y_test, scaler = 'standard'):
+        elif scaler == 'minmax':
+            self.scaler = MinMaxScaler()
 
-          X_train, X_test = self.set_scaler_transform(scaler, X_train, X_test)
+        else:
+            return None
 
-          X_train = torch.tensor(X_train, dtype=torch.float32)
-          y_train = torch.tensor(y_train, dtype=torch.long)
-          train_dataset = TensorDataset(X_train, y_train)
-          train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+    def fit_early_stopping(self, X_train, y_train, X_test, y_test, scaler = 'standard'):
 
-          X_test = torch.tensor(X_test, dtype=torch.float32)
-          y_test = torch.tensor(y_test, dtype=torch.long)
-          test_dataset = TensorDataset(X_test, y_test)
-          test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
+        X_train, X_test = self.set_scaler_transform(scaler, X_train, X_test)
 
-          self.set_criterion(y_train)
+        X_train = torch.tensor(X_train, dtype=torch.float32)
+        y_train = torch.tensor(y_train, dtype=torch.long)
+        train_dataset = TensorDataset(X_train, y_train)
+        train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
 
-          for epoch in range(self.max_epochs):
-              self.partial_fit(train_loader)
-              avg_val_loss, f1, _, _ = self.predict_and_evaluate(test_loader)
-              # ---------- Early stopping (por pérdida) ----------
-              patience = 10
-              min_delta = 1e-4
-              best_val_loss = float('inf')
-              epochs_no_improve = 0
-              best_model_state = None
+        X_test = torch.tensor(X_test, dtype=torch.float32)
+        y_test = torch.tensor(y_test, dtype=torch.long)
+        test_dataset = TensorDataset(X_test, y_test)
+        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
 
-              if avg_val_loss + min_delta < best_val_loss:
-                  best_val_loss = avg_val_loss
-                  best_model_state = self.model.state_dict()
-                  epochs_no_improve = 0
-              else:
-                  epochs_no_improve += 1
-                  if epochs_no_improve >= patience:
-                      break
+        self.set_criterion(y_train)
 
-          return f1
+        for epoch in range(self.max_epochs):
+            self.partial_fit(train_loader)
+            avg_val_loss, f1, _, _ = self.predict_and_evaluate(test_loader)
+            # ---------- Early stopping (por pérdida) ----------
+            patience = 10
+            min_delta = 1e-4
+            best_val_loss = float('inf')
+            epochs_no_improve = 0
+            best_model_state = None
+
+            if avg_val_loss + min_delta < best_val_loss:
+                best_val_loss = avg_val_loss
+                best_model_state = self.model.state_dict()
+                epochs_no_improve = 0
+            else:
+                epochs_no_improve += 1
+                if epochs_no_improve >= patience:
+                    break
+
+        return f1
+

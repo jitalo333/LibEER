@@ -1,12 +1,12 @@
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-import numpy as np
 from collections import Counter
 from data_utils.split import index_to_data
 from Trainer.Custom_training.pytorch_pipeline import Pytorch_Pipeline
+
+
 
 
 def count_labels(y_tensor):
@@ -127,7 +127,7 @@ class optuna_objective_cv:
             for split in splits:
                 train_indexes, test_indexes, val_indexes = split["train"], split["test"], split["val"]
                 # organize the data according to the resulting index
-                (X_train, y_train, X_test, y_test,  _, _) = index_to_data(data_i, label_i,  train_indexes, test_indexes, val_indexes)
+                (X_train, y_train, _, _,  X_test, y_test) = index_to_data(data_i, label_i,  train_indexes, test_indexes, val_indexes)
                 
 
             pipeline_mlp =  Pytorch_Pipeline(model_class=self.model_class, sample_weights_loss = self.sample_weights_loss)
@@ -207,3 +207,6 @@ class optuna_objective_cv:
     #----------- Método para obtener los resultados -----------
     def get_results(self):
       return self.results
+    
+
+
