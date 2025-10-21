@@ -116,7 +116,6 @@ class optuna_objective_cv:
             trial_params[param_name] = suggest_func(*args)
         # 2. COMBINAR los parámetros fijos y variables
         params = {**self.fixed_params, **trial_params}
-        print(params)
 
         scaler = trial.suggest_categorical("scaler", ['None', 'standard', 'minmax'])
         #------------- Hyperparameter search -------------------------------
