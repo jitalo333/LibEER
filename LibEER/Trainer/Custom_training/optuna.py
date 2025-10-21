@@ -1,28 +1,12 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset, random_split
-from sklearn.datasets import make_classification
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import MinMaxScaler
-import optuna
+from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-import pickle
-import os
-from imblearn.over_sampling import SMOTE
-from imblearn.under_sampling import RandomUnderSampler
 import numpy as np
 from collections import Counter
-import copy
-
-from sklearn.model_selection import StratifiedKFold
-
-import inspect
-
-from models.DGCNN import DGCNN
 from data_utils.split import index_to_data
+from Trainer.Custom_training.pytorch_pipeline import Pytorch_Pipeline
 
 
 def count_labels(y_tensor):
@@ -89,7 +73,7 @@ def get_metrics(y_true, y_pred, verbose = True):
 
 
 class optuna_objective_cv:
-    def __init__(self, all_dataset, selected_subjects, n_classes, SMOTE_on=None, sample_weights_loss=None, Test_mode = None, n_features = 160):
+    def __init__(self, all_dataset, selected_subjects, n_classes, model_class, params, sample_weights_loss=None, Test_mode = None, n_features = 160):
         self.results = {}
         self.all_dataset = all_dataset
         self.selected_subjects = selected_subjects
@@ -99,6 +83,8 @@ class optuna_objective_cv:
         self.best_model_trial = None
         self.Test_mode = Test_mode
         self.n_features = n_features
+        self.model_class = model_class
+        self.params = params
 
     def get_loaders(self, X_train, X_test, y_train, y_test, batch_size):
         X_train = torch.tensor(X_train, dtype=torch.float32)
@@ -114,44 +100,24 @@ class optuna_objective_cv:
         return train_loader, test_loader
 
     def objective(self, trial):
-        X, y = self.X, self.y
-        # ----------- Hiperparámetros a optimizar -----------
-        #n_layers = trial.suggest_int("n_layers", 1, 4)
-        params = {
-            'lr' : trial.suggest_float("lr", 1e-4, 5e-1, log=True),
-            'batch_size' : trial.suggest_categorical("batch_size", [32, 64, 128]),
-            'input_dim' : self.n_features,
-
-            'in_channels': 5,
-            'num_classes' : self.n_classes,
-            'num_electrodes': 32,
-            'k': 2,
-            'relu_is': 1,
-            'layers': [64],
-            'dropout_rate': trial.suggest_float("dropout", 0.1, 0.5),
-        }
-
+       
+        # ----------- Hiperparámetros a optimizar definidos dentro de funcion -----------
         scaler = trial.suggest_categorical("scaler", ['None', 'standard', 'minmax'])
         #------------- Hyperparameter search -------------------------------
         # Search hyperparameters for the model on all the selected subjects
         F1 = []
         all_metrics = []
-        for idx_subject, subject in self.selected_subjects:
+        for idx_subject, subject in enumerate(self.selected_subjects):
             data_i, label_i, splits = self.all_dataset[subject]["data"], self.all_dataset[subject]["label"], self.all_dataset[subject]["splits"]
             for split in splits:
                 train_indexes, test_indexes, val_indexes = split["train"], split["test"], split["val"]
                 # organize the data according to the resulting index
                 (X_train, y_train, X_test, y_test,  _, _) = index_to_data(data_i, label_i,  train_indexes, test_indexes, val_indexes)
+                
 
-            if self.Test_mode is None:
-                X_train, X_test, y_train, y_test = generate_datasets(X_train, X_test, y_train, y_test)
-                #Solucion parche
-                X_train = np.reshape(X_train, [X_train.shape[0], 32, 5])
-                X_test = np.reshape(X_test, [X_test.shape[0], 32, 5])
-
-            pipeline_mlp =  Pytorch_Pipeline(model_class=DGCNN, sample_weights_loss = self.sample_weights_loss)
+            pipeline_mlp =  Pytorch_Pipeline(model_class=self.model_class, sample_weights_loss = self.sample_weights_loss)
             #Set params
-            pipeline_mlp.set_params(**params)
+            pipeline_mlp.set_params(**self.params)
             #Set criterion
             pipeline_mlp.set_criterion(y_train)
 
@@ -171,10 +137,12 @@ class optuna_objective_cv:
                   avg_val_loss, f1, y_test, y_pred = pipeline_mlp.predict_and_evaluate(test_loader)
                   # ---------- Optuna pruning with F1 ----------
                   #Prune only on the first fold
+                  """
                   if idx_subject == 0:
                     trial.report(f1, epoch)
                     if trial.should_prune():
                         raise optuna.exceptions.TrialPruned()
+                  """
                   # ---------- Early stopping (por loss) ----------
                   if avg_val_loss + min_delta < best_val_loss:
                       best_val_loss = avg_val_loss
@@ -199,7 +167,7 @@ class optuna_objective_cv:
             if trial.number == 0 or mean_F1 > trial.study.best_value:
                 self.results = {
                     'metrics': self.avg_metrics(all_metrics),
-                    'best_params': params,
+                    'best_params': self.params,
                     'model_state_dict': best_model_state,
                     'epoch_number': epoch
                 }
@@ -207,6 +175,7 @@ class optuna_objective_cv:
         except ValueError:
           pass
 
+        
         return mean_F1
 
     def avg_metrics(self, all_metrics):
@@ -223,4 +192,4 @@ class optuna_objective_cv:
     #----------- Método para obtener los resultados -----------
     def get_results(self):
       return self.results
-    
+ 
