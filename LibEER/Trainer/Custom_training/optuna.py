@@ -73,7 +73,8 @@ def get_metrics(y_true, y_pred, verbose = True):
 
 
 class optuna_objective_cv:
-    def __init__(self, all_dataset, selected_subjects, n_classes, model_class, params, sample_weights_loss=None, Test_mode = None, n_features = 160):
+    def __init__(self, all_dataset, selected_subjects, n_classes, model_class, fixed_params, search_space, 
+                 sample_weights_loss=None, Test_mode = None, n_features = 160):
         self.results = {}
         self.all_dataset = all_dataset
         self.selected_subjects = selected_subjects
@@ -84,7 +85,8 @@ class optuna_objective_cv:
         self.Test_mode = Test_mode
         self.n_features = n_features
         self.model_class = model_class
-        self.params = params
+        self.fixed_params = fixed_params
+        self.search_space = search_space
 
     def get_loaders(self, X_train, X_test, y_train, y_test, batch_size):
         X_train = torch.tensor(X_train, dtype=torch.float32)
@@ -102,6 +104,20 @@ class optuna_objective_cv:
     def objective(self, trial):
        
         # ----------- Hiperparámetros a optimizar definidos dentro de funcion -----------
+        # 1. GENERAR los parámetros variables usando la instrucción externa
+        trial_params = {}
+        for param_name, (func_name, args, kwargs) in self.search_space.items():
+        
+            suggest_func = getattr(trial, func_name)
+            
+            # Llamar a la función con los argumentos definidos
+            # El primer argumento en 'args' es el nombre (ej: "lr")
+            # El valor devuelto (ej: 0.0015) se asigna a 'param_name' (ej: 'lr')
+            trial_params[param_name] = suggest_func(*args)
+        # 2. COMBINAR los parámetros fijos y variables
+        params = {**self.fixed_params, **trial_params}
+        print(params)
+
         scaler = trial.suggest_categorical("scaler", ['None', 'standard', 'minmax'])
         #------------- Hyperparameter search -------------------------------
         # Search hyperparameters for the model on all the selected subjects
@@ -117,7 +133,7 @@ class optuna_objective_cv:
 
             pipeline_mlp =  Pytorch_Pipeline(model_class=self.model_class, sample_weights_loss = self.sample_weights_loss)
             #Set params
-            pipeline_mlp.set_params(**self.params)
+            pipeline_mlp.set_params(**params)
             #Set criterion
             pipeline_mlp.set_criterion(y_train)
 
@@ -167,7 +183,7 @@ class optuna_objective_cv:
             if trial.number == 0 or mean_F1 > trial.study.best_value:
                 self.results = {
                     'metrics': self.avg_metrics(all_metrics),
-                    'best_params': self.params,
+                    'best_params': params,
                     'model_state_dict': best_model_state,
                     'epoch_number': epoch
                 }
@@ -192,4 +208,3 @@ class optuna_objective_cv:
     #----------- Método para obtener los resultados -----------
     def get_results(self):
       return self.results
- 
