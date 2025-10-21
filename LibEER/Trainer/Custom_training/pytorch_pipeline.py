@@ -76,7 +76,7 @@ class Pytorch_Pipeline():
     def predict(self, X):
         self.model.eval()
         if self.scaler is not None:
-        X = self.scaler.transform(X)
+            X = self.scaler.transform(X)
         X_tensor = torch.tensor(X, dtype=torch.float32)
         dataset = TensorDataset(X_tensor)
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
@@ -141,20 +141,20 @@ class Pytorch_Pipeline():
     def set_scaler_transform(self, scaler, X_train, X_test, dtype = 'Tabular'):
         # ----------- Escalado de datos -----------
         if dtype == 'Tabular':
-        if scaler == 'standard':
-            self.scaler = StandardScaler()
-            X_train = self.scaler.fit_transform(X_train)
-            X_test = self.scaler.transform(X_test)
-        elif scaler == 'minmax':
-            self.scaler = MinMaxScaler()
-            X_train = self.scaler.fit_transform(X_train)
-            X_test = self.scaler.transform(X_test)
-        else: pass
+            if scaler == 'standard':
+                self.scaler = StandardScaler()
+                X_train = self.scaler.fit_transform(X_train)
+                X_test = self.scaler.transform(X_test)
+            elif scaler == 'minmax':
+                self.scaler = MinMaxScaler()
+                X_train = self.scaler.fit_transform(X_train)
+                X_test = self.scaler.transform(X_test)
+            else: pass
 
 
         elif dtype == 'MultiDim_TimeSeries':
-        if scaler == 'standard':
-            X_train, X_test = Standard_scaler_channel(X_train, X_test)
+            if scaler == 'standard':
+                X_train, X_test = Standard_scaler_channel(X_train, X_test)
         elif scaler == 'minmax':
             X_train, X_test = MinMax_scaler_channel(X_train, X_test)
         else: pass
