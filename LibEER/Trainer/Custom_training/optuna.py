@@ -123,6 +123,7 @@ class optuna_objective_cv:
         F1 = []
         all_metrics = []
         for idx_subject, subject in enumerate(self.selected_subjects):
+            print(subject)
             data_i, label_i, splits = self.all_dataset[subject]["data"], self.all_dataset[subject]["label"], self.all_dataset[subject]["splits"]
             for split in splits:
                 train_indexes, test_indexes, val_indexes = split["train"], split["test"], split["val"]
