@@ -12,3 +12,4 @@ skorch
 braindecode
 xmltodict
 mat73
+optuna==4.5.0
