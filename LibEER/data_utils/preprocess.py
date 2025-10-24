@@ -904,7 +904,7 @@ channels_DEAP = ['fp1', 'af3', 'f3', 'f7', 'fc5', 'fc1', 'c3', 't7', 'cp5', 'cp1
 channels_SEED = ['fp1', 'fpz', 'fp2', 'af3', 'af4', 'f7', 'f5', 'f3', 'f1', 'fz', 'f2', 'f4', 'f6', 'f8', 'ft7', 'fc5', 'fc3', 'fc1', 'fcz', 'fc2', 'fc4', 'fc6', 'ft8', 't7', 'c5', 'c3', 'c1', 'cz', 'c2', 'c4', 'c6', 't8', 'tp7', 'cp5', 'cp3', 'cp1', 'cpz', 'cp2', 'cp4', 'cp6', 'tp8', 'p7', 'p5', 'p3', 'p1', 'pz', 'p2', 'p4', 'p6', 'p8', 'po7', 'po5', 'po3', 'poz', 'po4', 'po6', 'po8', 'cb1', 'o1', 'oz', 'o2', 'cb2']
 
 
-def get_order_idx(channels_escolares, channels_SEED, transform_escolares):
+def get_order_idx(channels_escolares, channels_DEAP, transform_escolares):
     """
     Returns the original indices of 'escolares' channels that have a valid 
     corresponding channel in 'channels_SEED'.
@@ -928,7 +928,7 @@ def get_order_idx(channels_escolares, channels_SEED, transform_escolares):
             new_idx_order.append(channels_escolares.index(ch_escolar))
     return new_idx_order
 
-def reorder_and_reduce_channels(data, new_idx_order):
+def reorder_and_reduce_channels(data, new_idx_order, mode = "Escolares"):
     """
     Reorders and reduces the channel dimension of a subject's data using NumPy advanced indexing.
     
@@ -940,19 +940,28 @@ def reorder_and_reduce_channels(data, new_idx_order):
         new_idx_order (list or np.ndarray): A list or array of integers specifying the 
                                             new desired order of channels. Indices for channels 
                                             to be dropped must be omitted from this list.
+        mode (str): Specifies the dataset type, either "Escolares" or "SEED".
 
     Returns:
         np.ndarray: The data with channels reordered and potentially reduced.
                     Dimensions: (trials, time, new_channel_count, bands).
     """
-    data = np.array(data)
-    reordered_data = data[:, :, new_idx_order, :]
+    if mode == "Escolares":
+      data = np.array(data)
+      new_data = data[:, :, new_idx_order, :]
     
-    return reordered_data
+    elif mode == "SEED":  
+      new_data = []
+      for data_i in data:
+          data_i = np.array(data_i)
+          reordered_data = data_i[:, new_idx_order, :]
+          new_data.append(reordered_data)
+    
+    return new_data
 
-def reorder_channels_escolares(data, channels_escolares, channels_SEED, transform_escolares):
+def reorder_channels_escolares(data, channels_escolares, channels_DEAP, transform_escolares):
     # Get idx from the new data order
-    new_idx_order = get_order_idx(channels_escolares, channels_SEED, transform_escolares)
+    new_idx_order = get_order_idx(channels_escolares, channels_DEAP, transform_escolares)
     print(new_idx_order)
 
     # Reorder data
@@ -963,3 +972,19 @@ def reorder_channels_escolares(data, channels_escolares, channels_SEED, transfor
     new_data = [new_data]
     
     return new_data
+
+def reorder_channels_SEED(data, channels_SEED, channels_DEAP, transform_SEED):
+    # Get idx from the new data order
+    new_idx_order = get_order_idx(channels_SEED, channels_DEAP, transform_SEED)
+    print(new_idx_order)
+
+    # Reorder data
+    all_data = []
+    for session in range(len(data)):
+        new_data = []
+        for subject in range(len(data[session])):
+            new_data.append(reorder_and_reduce_channels(data[session][subject], new_idx_order, mode = "SEED"))
+
+        all_data.append(new_data)
+    
+    return all_data
