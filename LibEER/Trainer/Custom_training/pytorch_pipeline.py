@@ -5,8 +5,10 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
-from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import inspect
+import os
+import joblib
 
 
 def get_sample_weights_loss(y):
@@ -46,6 +48,31 @@ def MinMax_scaler_channel(X_train, X_test):
             raise TypeError("Input debe ser torch.Tensor o np.ndarray")
 
     return scale(X_train), scale(X_test)
+
+def get_loaders(X_train, X_test, y_train, y_test, batch_size):
+    X_train = torch.tensor(X_train, dtype=torch.float32)
+    y_train = torch.tensor(y_train, dtype=torch.long)
+    train_dataset = TensorDataset(X_train, y_train)
+    train_loader = DataLoader(train_dataset, batch_size, shuffle=True)
+
+    X_test = torch.tensor(X_test, dtype=torch.float32)
+    y_test = torch.tensor(y_test, dtype=torch.long)
+    test_dataset = TensorDataset(X_test, y_test)
+    test_loader = DataLoader(test_dataset, batch_size, shuffle=False)
+
+    return train_loader, test_loader
+
+def get_metrics(y_true, y_pred, verbose = True):
+  metrics = {
+      'accuracy': accuracy_score(y_true, y_pred),
+      'precision': precision_score(y_true, y_pred, average='macro', zero_division=0),
+      'recall': recall_score(y_true, y_pred, average='macro', zero_division=0),
+      'f1_score': f1_score(y_true, y_pred, average='weighted'),
+      'cm': confusion_matrix(y_true, y_pred).tolist()
+  }
+  if verbose:
+    print(metrics)
+  return metrics
 
 class Pytorch_Pipeline():
     def __init__(self, model_class, sample_weights_loss=None, max_epochs = 200):
@@ -113,17 +140,74 @@ class Pytorch_Pipeline():
 
         return avg_val_loss, f1, y_true, y_pred
 
+    def load_and_extract_pretrained_model(self, path: str, model_attribute_name: str = 'model'):
+        """
+        Loads a pre-trained model saved with joblib and extracts the PyTorch 
+        model object (torch.nn.Module).
+
+        Args:
+            path (str): The path to the pre-trained model's .joblib file.
+            model_attribute_name (str): The name of the attribute within the 
+                                        joblib object that holds the PyTorch model.
+
+        Returns:
+            torch.nn.Module: The PyTorch model instance, or None if loading fails.
+        """
+        if not os.path.exists(path):
+            print(f"⚠️ Warning: Pre-trained file not found at {path}. Returning None.")
+            return None
+        
+        try:
+            # Load the complete wrapper object
+            model_wrapper = joblib.load(path)
+            
+            # Extract the PyTorch model instance
+            pretrained_model = getattr(model_wrapper, model_attribute_name, None)
+            
+            if pretrained_model is None or not isinstance(pretrained_model, torch.nn.Module):
+                print(f"❌ Load Error: The attribute '{model_attribute_name}' does not contain a torch.nn.Module instance or does not exist.")
+                return None
+
+            print(f"✅ Pre-trained model loaded from: {path}")
+            return pretrained_model
+            
+        except Exception as e:
+            print(f"❌ Error loading the pre-trained model with joblib: {e}. Returning None.")
+            return None
+
     def set_params(self, **params):
         self.params = params
 
-        # Obtener los parámetros esperados por el constructor de model_class
+        # 1. Handle pre-trained model loading
+        pretrained_model = None
+        if 'pretrained_model' in params:
+            pretrained_path = params.pop('pretrained_model')
+            # Call the independent function
+            pretrained_model = self.load_and_extract_pretrained_model(pretrained_path)
+
+        # 2. Initialize the base model
+        
+        # Get the expected parameters for the model_class constructor
         signature = inspect.signature(self.model_class.__init__)
         valid_keys = set(signature.parameters.keys()) - {'self'}
 
-        # Filtrar los params para incluir solo los esperados
-        filtered_params = {k: v for k, v in params.items() if k in valid_keys}
+        # Filter params to include only the expected ones
+        filtered_params = {k: v for k, v in self.params.items() if k in valid_keys}
 
+        # Initialize the model
         self.model = self.model_class(**filtered_params)
+
+        # 3. Apply weights if they exist
+        if pretrained_model is not None:
+            try:
+                # Copy the weights (state_dict) from the loaded model to the new model
+                self.model.load_state_dict(pretrained_model.state_dict())
+                print("✅ Pre-trained model weights applied successfully.")
+            except RuntimeError as e:
+                # This typically happens if the architectures don't match
+                print(f"❌ Error applying pre-trained weights (state_dict): {e}. Check architecture compatibility.")
+
+        # 4. Configure optimizer and other parameters
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.params['lr'])
         self.batch_size = self.params['batch_size']
 
