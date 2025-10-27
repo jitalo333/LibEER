@@ -140,7 +140,7 @@ class Pytorch_Pipeline():
 
         return avg_val_loss, f1, y_true, y_pred
 
-    def load_and_extract_pretrained_model(self, path: str, model_attribute_name: str = 'model'):
+    def load_and_extract_pretrained_model(path: str, model_attribute_name: str = 'model'):
         """
         Loads a pre-trained model saved with joblib and extracts the PyTorch 
         model object (torch.nn.Module).
@@ -171,6 +171,39 @@ class Pytorch_Pipeline():
         except Exception as e:
             print(f"❌ Error loading the pre-trained model with joblib: {e}. Returning None.")
             return None
+
+    def set_trainable_layers(model: nn.Module, n_unfreeze: int):
+        """
+        Sets all parameters in the model to frozen (requires_grad=False) 
+        and then unfreezes the last n_unfreeze layers.
+        """
+        
+        # 1. Freeze all parameters
+        for param in model.parameters():
+            param.requires_grad = False
+            
+        # 2. Get all named modules (layers)
+        # This is safer than just using parameters() because it respects module structure
+        modules_to_unfreeze = []
+        
+        # Iterate through named modules and add them to a list
+        # We use list(model.named_children()) to get a defined order
+        all_modules = list(model.named_children())
+        
+        # 3. Select the last 'n_unfreeze' modules
+        # If n_unfreeze is too large, it defaults to unfreezing all
+        modules_to_unfreeze = all_modules[-n_unfreeze:] 
+        
+        if not modules_to_unfreeze:
+            print("⚠️ Warning: No layers were selected for unfreezing (n_unfreeze might be 0 or model is empty).")
+            return
+
+        # 4. Unfreeze the parameters in the selected modules
+        print(f"⚙️ Unfreezing the last {len(modules_to_unfreeze)} modules for fine-tuning:")
+        for name, module in modules_to_unfreeze:
+            for param in module.parameters():
+                param.requires_grad = True
+            print(f"   -> Unfrozen module: {name}")
 
     def set_params(self, **params):
         self.params = params
@@ -204,8 +237,20 @@ class Pytorch_Pipeline():
                 # This typically happens if the architectures don't match
                 print(f"❌ Error applying pre-trained weights (state_dict): {e}. Check architecture compatibility.")
 
-        # 4. Configure optimizer and other parameters
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.params['lr'])
+        # 4. Handle layer unfreezing
+        if 'n_unfreeze' in self.params:
+            n_unfreeze = self.params['n_unfreeze']
+        if isinstance(n_unfreeze, int) and n_unfreeze > 0:
+            self.set_trainable_layers(self.model, n_unfreeze)
+        else:
+            print("⚠️ Warning: 'n_unfreeze' specified but not a positive integer. Training all layers.")
+
+
+        # 5. Configure optimizer and other parameters
+        # get unfreezed parameters
+        trainable_parameters = filter(lambda p: p.requires_grad, self.model.parameters())
+        self.optimizer = torch.optim.Adam(trainable_parameters, lr=self.params['lr'])
+        #self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.params['lr'])
         self.batch_size = self.params['batch_size']
 
     def set_criterion(self, y):
