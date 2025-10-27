@@ -159,10 +159,7 @@ class Pytorch_Pipeline():
         
         try:
             # Load the complete wrapper object
-            model_wrapper = joblib.load(path)
-            
-            # Extract the PyTorch model instance
-            pretrained_model = getattr(model_wrapper, model_attribute_name, None)
+            pretrained_model = joblib.load(path)
             
             if pretrained_model is None or not isinstance(pretrained_model, torch.nn.Module):
                 print(f"❌ Load Error: The attribute '{model_attribute_name}' does not contain a torch.nn.Module instance or does not exist.")
