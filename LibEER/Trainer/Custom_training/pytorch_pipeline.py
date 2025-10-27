@@ -140,7 +140,7 @@ class Pytorch_Pipeline():
 
         return avg_val_loss, f1, y_true, y_pred
 
-    def load_and_extract_pretrained_model(path: str, model_attribute_name: str = 'model'):
+    def load_and_extract_pretrained_model(self, path: str, model_attribute_name: str = 'model'):
         """
         Loads a pre-trained model saved with joblib and extracts the PyTorch 
         model object (torch.nn.Module).
@@ -172,7 +172,7 @@ class Pytorch_Pipeline():
             print(f"❌ Error loading the pre-trained model with joblib: {e}. Returning None.")
             return None
 
-    def set_trainable_layers(model: nn.Module, n_unfreeze: int):
+    def set_trainable_layers(self, model: nn.Module, n_unfreeze: int):
         """
         Sets all parameters in the model to frozen (requires_grad=False) 
         and then unfreezes the last n_unfreeze layers.
