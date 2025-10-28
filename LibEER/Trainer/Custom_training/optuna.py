@@ -74,7 +74,7 @@ def get_metrics(y_true, y_pred, verbose = True):
 
 class optuna_objective_cv:
     def __init__(self, all_dataset, selected_subjects, n_classes, model_class, fixed_params, search_space, 
-                 sample_weights_loss=None, Test_mode = None, n_features = 160):
+                 sample_weights_loss=None, Test_mode = None, n_features = 160, verbose = False ):
         self.results = {}
         self.all_dataset = all_dataset
         self.selected_subjects = selected_subjects
@@ -87,6 +87,7 @@ class optuna_objective_cv:
         self.model_class = model_class
         self.fixed_params = fixed_params
         self.search_space = search_space
+        self.verbose = verbose
 
     def get_loaders(self, X_train, X_test, y_train, y_test, batch_size):
         X_train = torch.tensor(X_train, dtype=torch.float32)
@@ -131,7 +132,8 @@ class optuna_objective_cv:
                 (X_train, y_train, _, _,  X_test, y_test) = index_to_data(data_i, label_i,  train_indexes, test_indexes, val_indexes)
                 
 
-            pipeline_mlp =  Pytorch_Pipeline(model_class=self.model_class, sample_weights_loss = self.sample_weights_loss)
+            pipeline_mlp =  Pytorch_Pipeline(model_class=self.model_class, sample_weights_loss = self.sample_weights_loss, 
+                                             verbose=self.verbose)
             #Set params
             pipeline_mlp.set_params(**params)
             #Set criterion
