@@ -75,7 +75,7 @@ def get_metrics(y_true, y_pred, verbose = True):
   return metrics
 
 class Pytorch_Pipeline():
-    def __init__(self, model_class, sample_weights_loss=None, max_epochs = 200):
+    def __init__(self, model_class, sample_weights_loss=None, max_epochs = 200, verbose = False):
         self.model_class = model_class
         self.model = None
         self.params = None
@@ -86,7 +86,8 @@ class Pytorch_Pipeline():
         self.batch_size = None
         self.max_epochs = max_epochs
         self.scaler = None
-
+        self.verbose = verbose
+        
     def partial_fit(self, loader):
         self.model.to(self.device)
         self.model.train()
@@ -164,8 +165,9 @@ class Pytorch_Pipeline():
             if pretrained_model is None or not isinstance(pretrained_model, torch.nn.Module):
                 print(f"❌ Load Error: The attribute '{model_attribute_name}' does not contain a torch.nn.Module instance or does not exist.")
                 return None
-
-            print(f"✅ Pre-trained model loaded from: {path}")
+            
+            if self.verbose:
+                print(f"✅ Pre-trained model loaded from: {path}")
             return pretrained_model
             
         except Exception as e:
@@ -199,11 +201,13 @@ class Pytorch_Pipeline():
             return
 
         # 4. Unfreeze the parameters in the selected modules
-        print(f"⚙️ Unfreezing the last {len(modules_to_unfreeze)} modules for fine-tuning:")
+        if self.verbose:
+            print(f"⚙️ Unfreezing the last {len(modules_to_unfreeze)} modules for fine-tuning:")
         for name, module in modules_to_unfreeze:
             for param in module.parameters():
                 param.requires_grad = True
-            print(f"   -> Unfrozen module: {name}")
+            if self.verbose:
+                print(f"   -> Unfrozen module: {name}")
 
     def set_params(self, **params):
         self.params = params
@@ -232,7 +236,8 @@ class Pytorch_Pipeline():
             try:
                 # Copy the weights (state_dict) from the loaded model to the new model
                 self.model.load_state_dict(pretrained_model.state_dict())
-                print("✅ Pre-trained model weights applied successfully.")
+                if self.verbose:
+                    print("✅ Pre-trained model weights applied successfully.")
 
                 # 4. Handle layer unfreezing
                 if 'n_unfreeze' in self.params:
