@@ -30,9 +30,9 @@ class DGCNN(nn.Module):
         self.num_classes = num_classes
         self.relu_is = relu_is
         self.get_param()
-        if num_electrodes == 62:
+        if num_electrodes == 62 and self.layers is None:
             self.layers = [64]
-        elif num_electrodes == 32:
+        elif num_electrodes == 32 and self.layers is None:
             self.layers = [128]
 
         self.graphConvs = nn.ModuleList()

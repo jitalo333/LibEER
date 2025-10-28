@@ -233,18 +233,18 @@ class Pytorch_Pipeline():
                 # Copy the weights (state_dict) from the loaded model to the new model
                 self.model.load_state_dict(pretrained_model.state_dict())
                 print("✅ Pre-trained model weights applied successfully.")
+
+                # 4. Handle layer unfreezing
+                if 'n_unfreeze' in self.params:
+                    n_unfreeze = self.params['n_unfreeze']
+                    if isinstance(n_unfreeze, int) and n_unfreeze > 0:
+                        self.set_trainable_layers(self.model, n_unfreeze)
+                    else:
+                        print("⚠️ Warning: 'n_unfreeze' specified but not a positive integer. Training all layers.")
+
             except RuntimeError as e:
                 # This typically happens if the architectures don't match
                 print(f"❌ Error applying pre-trained weights (state_dict): {e}. Check architecture compatibility.")
-
-        # 4. Handle layer unfreezing
-        if 'n_unfreeze' in self.params:
-            n_unfreeze = self.params['n_unfreeze']
-        if isinstance(n_unfreeze, int) and n_unfreeze > 0:
-            self.set_trainable_layers(self.model, n_unfreeze)
-        else:
-            print("⚠️ Warning: 'n_unfreeze' specified but not a positive integer. Training all layers.")
-
 
         # 5. Configure optimizer and other parameters
         # get unfreezed parameters
@@ -334,4 +334,3 @@ class Pytorch_Pipeline():
                     break
 
         return f1
-
