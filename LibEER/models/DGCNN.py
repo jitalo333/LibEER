@@ -21,20 +21,23 @@ class DGCNN(nn.Module):
         # out_channel(int): The feature dimension of  the graph after GCN.
         super(DGCNN, self).__init__()
         self.verbose = verbose
+        
 
         self.dropout_rate = dropout_rate
-        self.layers = layers
         self.k = k
         self.in_channels = in_channels
         self.num_electrodes = num_electrodes
         self.num_classes = num_classes
         self.relu_is = relu_is
         self.get_param()
-        if self.layers is None:
+        
+        if layers is None:
             if num_electrodes == 62:
                 self.layers = [64]
             elif num_electrodes == 32:
                 self.layers = [128]
+        else:
+            self.layers = layers
 
         self.graphConvs = nn.ModuleList()
         self.graphConvs.append(GraphConv(self.k, self.in_channels, self.layers[0]))
