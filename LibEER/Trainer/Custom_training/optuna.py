@@ -114,7 +114,18 @@ class optuna_objective_cv:
             # Llamar a la función con los argumentos definidos
             # El primer argumento en 'args' es el nombre (ej: "lr")
             # El valor devuelto (ej: 0.0015) se asigna a 'param_name' (ej: 'lr')
-            trial_params[param_name] = suggest_func(*args)
+            
+            if param_name == 'n_layers':
+                # n_layers es el número de capas que quieres construir (ej. 3)
+                n_layers_count = suggest_func(*args) 
+
+                # Multiplica la base (e.g., 64) por 2^i
+                trial_params[param_name] = [
+                    32 * (2 ** i) for i in range(n_layers_count)
+                ]
+            else:
+                trial_params[param_name] = suggest_func(*args)
+
         # 2. COMBINAR los parámetros fijos y variables
         params = {**self.fixed_params, **trial_params}
 
