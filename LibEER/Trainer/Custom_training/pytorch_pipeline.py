@@ -67,7 +67,7 @@ def get_metrics(y_true, y_pred, verbose = True):
       'accuracy': accuracy_score(y_true, y_pred),
       'precision': precision_score(y_true, y_pred, average='macro', zero_division=0),
       'recall': recall_score(y_true, y_pred, average='macro', zero_division=0),
-      'f1_score': f1_score(y_true, y_pred, average='weighted'),
+      'f1_score': f1_score(y_true, y_pred, average='macro'),
       'cm': confusion_matrix(y_true, y_pred).tolist()
   }
   if verbose:
@@ -137,7 +137,7 @@ class Pytorch_Pipeline():
         avg_val_loss = val_loss / n_samples
         y_true = torch.cat(all_targets).numpy()
         y_pred = torch.cat(all_preds).numpy()
-        f1 = f1_score(y_true, y_pred, average='weighted')  # weighted F1
+        f1 = f1_score(y_true, y_pred, average='macro')  # weighted F1
 
         return avg_val_loss, f1, y_true, y_pred
 
