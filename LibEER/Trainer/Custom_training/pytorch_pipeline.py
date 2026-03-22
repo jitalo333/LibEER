@@ -88,14 +88,14 @@ class Pytorch_Pipeline():
         self.scaler = None
         self.verbose = verbose
         
-    def partial_fit(self, loader):
+    def partial_fit(self, loader, loss_func=None, loss_param=None):
         self.model.to(self.device)
         self.model.train()
 
         for xb, yb in loader:
             xb, yb = xb.to(self.device), yb.to(self.device)
             self.optimizer.zero_grad()
-            loss = self.criterion(self.model(xb), yb)
+            loss = self.criterion(self.model(xb), yb)  +  (0 if loss_func is None else loss_func(loss_param))
             loss.backward()
             self.optimizer.step()
 
@@ -118,7 +118,7 @@ class Pytorch_Pipeline():
         preds = np.concatenate(preds, axis=0)
         return np.argmax(preds, axis=1)
 
-    def predict_and_evaluate(self, loader):
+    def predict_and_evaluate(self, loader, loss_func=None, loss_param=None):
         self.model.eval()
         val_loss, n_samples = 0.0, 0
         all_preds, all_targets = [], []
@@ -126,8 +126,8 @@ class Pytorch_Pipeline():
             for xb, yb in loader:
                 xb, yb = xb.to(self.device), yb.to(self.device)
                 output = self.model(xb)
-                loss = self.criterion(output, yb)  #+  (0 if loss_func is None else loss_func(loss_param))
-                val_loss += self.criterion(output, yb).item() * xb.size(0)
+                loss = self.criterion(output, yb).item() +  (0 if loss_func is None else loss_func(loss_param))
+                val_loss += loss * xb.size(0)
                 n_samples += xb.size(0)
 
                 pred = output.argmax(dim=1)
