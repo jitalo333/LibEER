@@ -126,7 +126,7 @@ class Pytorch_Pipeline():
             for xb, yb in loader:
                 xb, yb = xb.to(self.device), yb.to(self.device)
                 output = self.model(xb)
-                loss = self.criterion(output, yb)
+                loss = self.criterion(output, yb)  #+  (0 if loss_func is None else loss_func(loss_param))
                 val_loss += self.criterion(output, yb).item() * xb.size(0)
                 n_samples += xb.size(0)
 
@@ -266,6 +266,8 @@ class Pytorch_Pipeline():
             self.criterion = nn.CrossEntropyLoss(weight=class_weights)
         else:
             self.criterion = nn.CrossEntropyLoss()
+
+        #loss = criterion(outputs, targets) +  (0 if loss_func is None else loss_func(loss_param))
 
         return self
 
