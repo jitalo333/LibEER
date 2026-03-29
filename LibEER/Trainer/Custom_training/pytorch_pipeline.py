@@ -74,6 +74,39 @@ def get_metrics(y_true, y_pred, verbose = True):
     print(metrics)
   return metrics
 
+def standard_scaler_across_samples(X_train, X_test):
+    """
+    Scale data using train mean and std (z-score),
+    flattening all dimensions except batch.
+    """
+
+    # Save original shapes
+    train_shape = X_train.shape
+    test_shape = X_test.shape
+
+    # Flatten: (N, ...) -> (N, -1)
+    X_train_flat = X_train.view(X_train.shape[0], -1)
+    X_test_flat  = X_test.view(X_test.shape[0], -1)
+
+    # Compute statistics ONLY from training data
+    mean = X_train_flat.mean(dim=0)
+    std  = X_train_flat.std(dim=0)
+
+    # Avoid division by zero
+    std[std == 0] = 1.0
+
+    # Normalize
+    X_train_scaled = (X_train_flat - mean) / std
+    X_test_scaled  = (X_test_flat - mean) / std
+
+    # Reshape back to original dimensions
+    X_train_scaled = X_train_scaled.view(train_shape)
+    X_test_scaled  = X_test_scaled.view(test_shape)
+
+    return X_train_scaled, X_test_scaled
+
+
+
 class Pytorch_Pipeline():
     def __init__(self, model_class, sample_weights_loss=None, max_epochs = 200, verbose = False):
         self.model_class = model_class
@@ -288,9 +321,14 @@ class Pytorch_Pipeline():
         elif dtype == 'MultiDim_TimeSeries':
             if scaler == 'standard':
                 X_train, X_test = Standard_scaler_channel(X_train, X_test)
-        elif scaler == 'minmax':
-            X_train, X_test = MinMax_scaler_channel(X_train, X_test)
-        else: pass
+
+            if scaler == "standard_across_samples":
+                X_train, X_test = standard_scaler_across_samples(X_train, X_test)
+        
+            elif scaler == 'minmax':
+                X_train, X_test = MinMax_scaler_channel(X_train, X_test)
+            else: 
+                pass
 
         return X_train, X_test
 
