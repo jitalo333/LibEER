@@ -49,6 +49,49 @@ def MinMax_scaler_channel(X_train, X_test):
 
     return scale(X_train), scale(X_test)
 
+def standard_scaler_across_samples(X_train, X_test, n_features):
+    
+    # Detect backend (torch or numpy)
+    is_torch = isinstance(X_train, torch.Tensor)
+
+    # Save original shapes
+    train_shape = X_train.shape
+    test_shape = X_test.shape
+
+    # Ensure contiguous memory (only for torch)
+    if is_torch:
+        X_train = X_train.contiguous()
+        X_test = X_test.contiguous()
+
+    # Flatten: (..., C, F) -> (num_samples, n_features)
+    X_train_flat = X_train.reshape(-1, n_features)
+    X_test_flat  = X_test.reshape(-1, n_features)
+
+    # Compute statistics ONLY from training data
+    if is_torch:
+        mean = X_train_flat.mean(dim=0)
+        std  = X_train_flat.std(dim=0)
+
+        # Avoid division by zero
+        std = torch.where(std == 0, torch.ones_like(std), std)
+
+    else:
+        mean = X_train_flat.mean(axis=0)
+        std  = X_train_flat.std(axis=0)
+
+        # Avoid division by zero
+        std[std == 0] = 1.0
+
+    # Normalize
+    X_train_scaled = (X_train_flat - mean) / std
+    X_test_scaled  = (X_test_flat - mean) / std
+
+    # Reshape back to original dimensions
+    X_train_scaled = X_train_scaled.reshape(train_shape)
+    X_test_scaled  = X_test_scaled.reshape(test_shape)
+
+    return X_train_scaled, X_test_scaled
+
 def get_loaders(X_train, X_test, y_train, y_test, batch_size):
     X_train = torch.tensor(X_train, dtype=torch.float32)
     y_train = torch.tensor(y_train, dtype=torch.long)
@@ -73,43 +116,6 @@ def get_metrics(y_true, y_pred, verbose = True):
   if verbose:
     print(metrics)
   return metrics
-
-
-
-def standard_scaler_across_samples(X_train, X_test, n_features):
-    
-    # Save original shapes
-    train_shape = X_train.shape
-    test_shape = X_test.shape
-
-    # Ensure contiguous memory
-    X_train = X_train.contiguous()
-    X_test = X_test.contiguous()
-
-    # Get feature dimensions (last two)
-    #C, F = X_train.shape[-2], X_train.shape[-1]
-
-    # Flatten:
-    # (..., C, F) -> (num_samples, C*F)
-    X_train_flat = X_train.reshape(-1, n_features)
-    X_test_flat  = X_test.reshape(-1, n_features)
-
-    # Compute statistics ONLY from training data
-    mean = X_train_flat.mean(dim=0)
-    std  = X_train_flat.std(dim=0)
-
-    # Avoid division by zero
-    std = torch.where(std == 0, torch.ones_like(std), std)
-
-    # Normalize
-    X_train_scaled = (X_train_flat - mean) / std
-    X_test_scaled  = (X_test_flat - mean) / std
-
-    # Reshape back to original dimensions
-    X_train_scaled = X_train_scaled.reshape(train_shape)
-    X_test_scaled  = X_test_scaled.reshape(test_shape)
-
-    return X_train_scaled, X_test_scaled
 
 
 class Pytorch_Pipeline():
