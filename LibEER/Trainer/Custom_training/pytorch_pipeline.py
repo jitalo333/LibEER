@@ -11,13 +11,20 @@ import os
 import joblib
 
 
-def get_sample_weights_loss(y):
-  y = np.asarray(y, dtype=np.int64)
-  class_counts = np.bincount(y)
-  class_weights = 1.0 / class_counts
-  class_weights = class_weights / class_weights.sum()
-
-  return class_weights
+def get_sample_weights_loss(y, epsilon=1e-6):
+    """
+    Calcula pesos de clase para la loss, evitando division por cero.
+    y: array-like de etiquetas (int)
+    epsilon: valor pequeño para prevenir division por cero
+    """
+    y = np.asarray(y, dtype=np.int64)
+    class_counts = np.bincount(y)
+    
+    # evitar division por cero
+    class_weights = 1.0 / (class_counts + epsilon)
+    class_weights = class_weights / class_weights.sum()
+    
+    return class_weights
 
 def Standard_scaler_channel(X_train, X_test):
     def scale(X):
