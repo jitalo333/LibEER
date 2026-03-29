@@ -74,37 +74,42 @@ def get_metrics(y_true, y_pred, verbose = True):
     print(metrics)
   return metrics
 
-def standard_scaler_across_samples(X_train, X_test):
-    """
-    Scale data using train mean and std (z-score),
-    flattening all dimensions except batch.
-    """
 
+
+def standard_scaler_across_samples(X_train, X_test, n_features):
+    
     # Save original shapes
     train_shape = X_train.shape
     test_shape = X_test.shape
 
-    # Flatten: (N, ...) -> (N, -1)
-    X_train_flat = X_train.view(X_train.shape[0], -1)
-    X_test_flat  = X_test.view(X_test.shape[0], -1)
+    # Ensure contiguous memory
+    X_train = X_train.contiguous()
+    X_test = X_test.contiguous()
+
+    # Get feature dimensions (last two)
+    #C, F = X_train.shape[-2], X_train.shape[-1]
+
+    # Flatten:
+    # (..., C, F) -> (num_samples, C*F)
+    X_train_flat = X_train.reshape(-1, n_features)
+    X_test_flat  = X_test.reshape(-1, n_features)
 
     # Compute statistics ONLY from training data
     mean = X_train_flat.mean(dim=0)
     std  = X_train_flat.std(dim=0)
 
     # Avoid division by zero
-    std[std == 0] = 1.0
+    std = torch.where(std == 0, torch.ones_like(std), std)
 
     # Normalize
     X_train_scaled = (X_train_flat - mean) / std
     X_test_scaled  = (X_test_flat - mean) / std
 
     # Reshape back to original dimensions
-    X_train_scaled = X_train_scaled.view(train_shape)
-    X_test_scaled  = X_test_scaled.view(test_shape)
+    X_train_scaled = X_train_scaled.reshape(train_shape)
+    X_test_scaled  = X_test_scaled.reshape(test_shape)
 
     return X_train_scaled, X_test_scaled
-
 
 
 class Pytorch_Pipeline():
@@ -304,7 +309,7 @@ class Pytorch_Pipeline():
 
         return self
 
-    def set_scaler_transform(self, scaler, X_train, X_test, dtype = 'Tabular'):
+    def set_scaler_transform(self, scaler, X_train, X_test, dtype = 'Tabular', n_features = None):
         # ----------- Escalado de datos -----------
         if dtype == 'Tabular':
             if scaler == 'standard':
@@ -323,7 +328,7 @@ class Pytorch_Pipeline():
                 X_train, X_test = Standard_scaler_channel(X_train, X_test)
 
             if scaler == "standard_across_samples":
-                X_train, X_test = standard_scaler_across_samples(X_train, X_test)
+                X_train, X_test = standard_scaler_across_samples(X_train, X_test, n_features)
         
             elif scaler == 'minmax':
                 X_train, X_test = MinMax_scaler_channel(X_train, X_test)
