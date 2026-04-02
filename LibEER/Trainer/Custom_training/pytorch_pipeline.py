@@ -117,7 +117,10 @@ def get_loaders(X_train, X_test, y_train, y_test, batch_size, sampler = None):
     X_train = torch.tensor(X_train, dtype=torch.float32)
     y_train = torch.tensor(y_train, dtype=torch.long)
     train_dataset = TensorDataset(X_train, y_train)
-    train_loader = DataLoader(train_dataset, batch_size, shuffle=True, sampler=sampler)
+    if sampler is not None:
+        train_loader = DataLoader(train_dataset, batch_size, sampler=sampler)
+    else: 
+        train_loader = DataLoader(train_dataset, batch_size, shuffle=True)
 
     X_test = torch.tensor(X_test, dtype=torch.float32)
     y_test = torch.tensor(y_test, dtype=torch.long)
