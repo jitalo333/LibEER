@@ -11,6 +11,20 @@ import os
 import joblib
 
 
+from torch.utils.data import DataLoader, WeightedRandomSampler
+
+# pesos por muestra (mismo largo que el dataset)
+def get_da_sampler(w_source_da):
+    weights = torch.tensor(w_source_da, dtype=torch.float)
+
+    sampler = WeightedRandomSampler(
+        weights=weights,
+        num_samples=len(weights),
+        replacement=True  # importante
+    )
+    return sampler
+
+
 def get_sample_weights_loss(y, epsilon=1e-6):
     """
     Calcula pesos de clase para la loss, evitando division por cero.
@@ -99,11 +113,11 @@ def standard_scaler_across_samples(X_train, X_test, n_features):
 
     return X_train_scaled, X_test_scaled
 
-def get_loaders(X_train, X_test, y_train, y_test, batch_size):
+def get_loaders(X_train, X_test, y_train, y_test, batch_size, sampler = None):
     X_train = torch.tensor(X_train, dtype=torch.float32)
     y_train = torch.tensor(y_train, dtype=torch.long)
     train_dataset = TensorDataset(X_train, y_train)
-    train_loader = DataLoader(train_dataset, batch_size, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size, shuffle=True, sampler=sampler)
 
     X_test = torch.tensor(X_test, dtype=torch.float32)
     y_test = torch.tensor(y_test, dtype=torch.long)
